@@ -73,29 +73,37 @@ object IncrementalCompilationUtils {
         // Replace the placeholder options with real ones obtained from the op
         val realOptions = op.createSnapshotBasedIcOptions()
         // Copy values from cfg.options (which we filled already) to realOptions
-        val keys = listOf(
-            JvmSnapshotBasedIncrementalCompilationOptions.ROOT_PROJECT_DIR,
-            JvmSnapshotBasedIncrementalCompilationOptions.MODULE_BUILD_DIR,
-            JvmSnapshotBasedIncrementalCompilationOptions.PRECISE_JAVA_TRACKING,
-            JvmSnapshotBasedIncrementalCompilationOptions.BACKUP_CLASSES,
-            JvmSnapshotBasedIncrementalCompilationOptions.KEEP_IC_CACHES_IN_MEMORY,
-            JvmSnapshotBasedIncrementalCompilationOptions.FORCE_RECOMPILATION,
-            JvmSnapshotBasedIncrementalCompilationOptions.OUTPUT_DIRS,
-            JvmSnapshotBasedIncrementalCompilationOptions.ASSURED_NO_CLASSPATH_SNAPSHOT_CHANGES,
-            JvmSnapshotBasedIncrementalCompilationOptions.USE_FIR_RUNNER,
-        )
-        keys.forEach { key ->
-            // Only copy values that were explicitly set in the configuration
-            @Suppress("UNCHECKED_CAST")
-            val customOptions = cfg.options as Any
-            if (customOptions.javaClass.methods.any { it.name == "hasKey" }) {
-                val hasKeyMethod = customOptions.javaClass.getMethod("hasKey", JvmSnapshotBasedIncrementalCompilationOptions.Option::class.java)
-                if (hasKeyMethod.invoke(customOptions, key) as Boolean) {
-                    @Suppress("UNCHECKED_CAST", "MEMBER_PROJECTED_OUT")
-                    runCatching { realOptions[key] = cfg.options[key] }.getOrNull()
-                }
+        val customOptionsAny = cfg.options as Any
+        val hasKeyFun: (JvmSnapshotBasedIncrementalCompilationOptions.Option<*>) -> Boolean = if (
+            customOptionsAny.javaClass.methods.any { it.name == "hasKey" }
+        ) {
+            val hasKeyMethod = customOptionsAny.javaClass.getMethod(
+                "hasKey",
+                JvmSnapshotBasedIncrementalCompilationOptions.Option::class.java
+            )
+            ({ opt: JvmSnapshotBasedIncrementalCompilationOptions.Option<*> ->
+                hasKeyMethod.invoke(customOptionsAny, opt) as Boolean
+            })
+        } else {
+            { _: JvmSnapshotBasedIncrementalCompilationOptions.Option<*> -> false }
+        }
+
+        fun <T> copyIfPresent(key: JvmSnapshotBasedIncrementalCompilationOptions.Option<T>) {
+            if (hasKeyFun(key)) {
+                // Generics are respected because key carries T
+                realOptions[key] = cfg.options[key]
             }
         }
+
+        copyIfPresent(JvmSnapshotBasedIncrementalCompilationOptions.ROOT_PROJECT_DIR)
+        copyIfPresent(JvmSnapshotBasedIncrementalCompilationOptions.MODULE_BUILD_DIR)
+        copyIfPresent(JvmSnapshotBasedIncrementalCompilationOptions.PRECISE_JAVA_TRACKING)
+        copyIfPresent(JvmSnapshotBasedIncrementalCompilationOptions.BACKUP_CLASSES)
+        copyIfPresent(JvmSnapshotBasedIncrementalCompilationOptions.KEEP_IC_CACHES_IN_MEMORY)
+        copyIfPresent(JvmSnapshotBasedIncrementalCompilationOptions.FORCE_RECOMPILATION)
+        copyIfPresent(JvmSnapshotBasedIncrementalCompilationOptions.OUTPUT_DIRS)
+        copyIfPresent(JvmSnapshotBasedIncrementalCompilationOptions.ASSURED_NO_CLASSPATH_SNAPSHOT_CHANGES)
+        copyIfPresent(JvmSnapshotBasedIncrementalCompilationOptions.USE_FIR_RUNNER)
 
         val realCfg = JvmSnapshotBasedIncrementalCompilationConfiguration(
             cfg.workingDirectory,
