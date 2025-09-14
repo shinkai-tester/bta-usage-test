@@ -62,3 +62,11 @@
 - ✅ **In-process execution** ensures compilation works in the same JVM process
 - ✅ **Daemon execution** verifies compilation works with daemon process
 - ✅ **Daemon with custom JVM arguments** tests daemon configuration with custom memory settings
+
+##### 4. **`CompilerArgumentsTest.kt`** - Compiler Arguments Tests
+**Purpose**: verifies passing and conversion of common and JVM-specific compiler arguments and error handling for invalid/missing arguments.
+
+**What it tests**:
+- ✅ **Common compiler arguments** checks languageVersion, apiVersion, progressive mode, and opt-in markers
+- ✅ **JVM-specific arguments** checks jvmTarget (e.g., 17 → classfile major 61), moduleName, and -java-parameters flag
+- ✅ **Error handling** ensures unresolved references are reported when stdlib is excluded or classpath is invalid
