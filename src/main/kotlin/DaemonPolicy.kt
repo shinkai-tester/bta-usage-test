@@ -5,7 +5,7 @@ import kotlin.time.Duration.Companion.milliseconds
 // Extension function to configure daemon execution policy with JVM arguments and shutdown delay
 @OptIn(ExperimentalBuildToolsApi::class)
 fun ExecutionPolicy.configureDaemon(
-    jvmArgs: List<String> = listOf("-Xmx3g", "-Xms1g"),
+    jvmArgs: List<String> = listOf("Xmx3g", "Xms1g"),
     shutdownDelayMs: Long = 1000
 ) {
     // Use reflection to access the daemon policy fields directly
@@ -18,7 +18,7 @@ fun ExecutionPolicy.configureDaemon(
             method.parameterCount == 2 && 
             method.parameterTypes[0].name == "org.jetbrains.kotlin.buildtools.api.ExecutionPolicy\$WithDaemon\$Option"
         } ?: error("No setter method to configure daemon policy with ExecutionPolicy\$WithDaemon\$Option")
-        
+
         // Set JVM args (already a list as expected by the daemon)
         setMethod.invoke(this, jvmArgsKey, jvmArgs)
         

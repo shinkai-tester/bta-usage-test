@@ -91,7 +91,12 @@ class ToolchainManager {
         val args = operation.compilerArguments
         args[JvmCompilerArguments.NO_STDLIB] = true
         args[JvmCompilerArguments.NO_REFLECT] = true
-        args[JvmCompilerArguments.CLASSPATH] = findStdlibJar()
+
+        val stdlib = findStdlibJar()
+        val classpath = listOfNotNull(stdlib)
+            .filter { it.isNotBlank() && File(it).exists() }
+            .joinToString(File.pathSeparator)
+        args[JvmCompilerArguments.CLASSPATH] = classpath
         
         // Set module name for incremental compilation support
         args[JvmCompilerArguments.MODULE_NAME] = "test-module"
@@ -105,41 +110,12 @@ class ToolchainManager {
     
     /**
      * Locates the kotlin-stdlib JAR file on the classpath.
+     * Uses shared StdlibUtils to avoid code duplication with Main.kt.
      * 
      * @return Path to the kotlin-stdlib JAR file
      * @throws IllegalStateException if the stdlib JAR cannot be located
      */
-    fun findStdlibJar(): String {
-        val resourceName = KotlinVersion::class.java.name.replace('.', '/') + ".class"
-        val url = KotlinVersion::class.java.classLoader.getResource(resourceName)
-            ?: error("Could not locate kotlin-stdlib (resource $resourceName not found on classpath)")
-
-        val spec = url.toString()
-
-        if (spec.startsWith("jar:") && spec.contains(".jar!")) {
-            val jarPart = spec.substringAfter("jar:").substringBefore("!")
-            val path = jarPart.removePrefix("file:")
-            val normalized = normalizeFilePath(path)
-            if (File(normalized).exists()) return normalized
-        } else if (spec.startsWith("file:")) {
-            // Class loaded from an exploded directory. Find stdlib jar on classpath.
-            val cpEntries = System.getProperty("java.class.path").orEmpty().split(File.pathSeparator)
-            val candidate = cpEntries.firstNotNullOfOrNull { entry ->
-                if (entry.contains("kotlin-stdlib") && entry.endsWith(".jar") && File(entry).exists()) entry else null
-            }
-            if (candidate != null) return candidate
-        }
-
-        // Fallback: scan classpath thoroughly for kotlin-stdlib jar
-        val cpEntries = System.getProperty("java.class.path").orEmpty().split(File.pathSeparator)
-        val regex = Regex("""kotlin-stdlib(-jdk[0-9]+)?(-\d[\w\.+-]*)?\.jar$""")
-        val match = cpEntries.firstNotNullOfOrNull { entry ->
-            if (entry.isNotBlank() && regex.containsMatchIn(File(entry).name) && File(entry).exists()) entry else null
-        }
-        if (match != null) return match
-
-        error("Could not locate kotlin-stdlib JAR. URL was: $spec; classpath=" + System.getProperty("java.class.path"))
-    }
+    fun findStdlibJar(): String = StdlibUtils.findStdlibJar()
     
     /**
      * Builds a URLClassLoader suitable for daemon execution policy usage.
@@ -153,21 +129,7 @@ class ToolchainManager {
             listOf("org.jetbrains.kotlin.buildtools.api", "kotlin.")
         )
     }
-    
-    /**
-     * Normalizes a file path for the current operating system.
-     * 
-     * @param path The file path to normalize
-     * @return Normalized file path
-     */
-    private fun normalizeFilePath(path: String): String {
-        var p = path
-        if (File.separatorChar == '\\' && p.matches(Regex("^/[A-Za-z]:.*"))) {
-            p = p.removePrefix("/")
-        }
-        return p.replace('/', File.separatorChar)
-    }
-    
+
     /**
      * Configures JDK settings for the compilation arguments.
      * 

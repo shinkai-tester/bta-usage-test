@@ -1,6 +1,7 @@
 import org.jetbrains.kotlin.buildtools.api.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Order
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -17,6 +18,7 @@ import kotlin.test.assertTrue
  * to reduce duplication and improve maintainability.
  */
 @OptIn(ExperimentalBuildToolsApi::class)
+@Order(1)
 class JvmCompilationTest : TestBase() {
 
     @Test
@@ -30,10 +32,11 @@ class JvmCompilationTest : TestBase() {
             }
         """)
 
-        // When: Compiling the Kotlin source
+        // When: Compiling the Kotlin source with console logging enabled
         val toolchain = framework.loadToolchain()
         val operation = CompilationTestUtils.newJvmOp(toolchain, listOf(source), setup.outputDirectory, framework)
-        val result = CompilationTestUtils.runCompile(toolchain, operation)
+        val logger = TestLogger(printToConsole = true)
+        val result = CompilationTestUtils.runCompile(toolchain, operation, logger)
 
         // Then: Compilation should succeed and generate the expected class file
         assertCompilationSuccessful(result)

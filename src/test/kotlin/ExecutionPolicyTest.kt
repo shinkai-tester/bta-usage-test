@@ -1,6 +1,7 @@
 import org.jetbrains.kotlin.buildtools.api.CompilationResult
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
 import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 
@@ -13,6 +14,7 @@ import kotlin.test.assertEquals
  * Each test uses clear Arrange/Act/Assert (Given/When/Then) sections so it’s obvious what is being tested.
  */
 @OptIn(ExperimentalBuildToolsApi::class)
+@Order(2)
 class ExecutionPolicyTest : TestBase() {
 
 
