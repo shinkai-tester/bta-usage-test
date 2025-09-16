@@ -54,7 +54,7 @@ object ClasspathUtils {
                             c = findClass(name)
                         } catch (_: ClassNotFoundException) { /* ignored */ }
                     }
-                    // Fallback to parent chain
+                    // Fallback to a parent chain
                     if (c == null) {
                         c = parentCL.loadClass(name)
                     }
@@ -69,6 +69,10 @@ object ClasspathUtils {
     fun createChildFirstUrlClassLoaderWithSystemParent(parentFirstPrefixes: List<String>): URLClassLoader {
         val parent = ClassLoader.getSystemClassLoader()
         val urls = buildCurrentProcessClasspathUrls()
-        return ChildFirstUrlClassLoader(urls, parent, parentFirstPrefixes)
+        // Always ensure API package is delegated to parent first to avoid duplicate API classes
+        val combinedPrefixes =
+            if (parentFirstPrefixes.any { it == "org.jetbrains.kotlin.buildtools.api." }) parentFirstPrefixes
+            else parentFirstPrefixes + "org.jetbrains.kotlin.buildtools.api."
+        return ChildFirstUrlClassLoader(urls, parent, combinedPrefixes)
     }
 }
