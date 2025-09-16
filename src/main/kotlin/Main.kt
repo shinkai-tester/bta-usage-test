@@ -10,8 +10,8 @@ import kotlin.system.exitProcess
 
 @OptIn(ExperimentalBuildToolsApi::class, ExperimentalCompilerArgument::class)
 fun main() {
-    // Create test source file
-    val tmpDir: Path = Files.createTempDirectory("kotlin-compilation")
+    // Create a test source file
+    val tmpDir: Path = Files.createTempDirectory("bta-usage-KT-78196")
     val outDir: Path = tmpDir.resolve("out").createDirectories()
     val src: Path = tmpDir.resolve("Hello.kt")
     src.writeText(
@@ -29,68 +29,76 @@ fun main() {
     )
 
     // Choose execution mode
-    val useDaemon = false // Change to false for in-process compilation
-    
-    // Load toolchain with appropriate ClassLoader
-    val classLoader = if (useDaemon) {
-        // For daemon mode, use URLClassLoader with child-first delegation,
-        // but parent-first for API package to avoid duplicating API classes
-        val apiPrefixes = listOf(
-            "kotlin.",
-            "kotlinx."
-        )
-        ClasspathUtils.createChildFirstUrlClassLoaderWithSystemParent(apiPrefixes)
-    } else {
-        // For in-process mode, use system ClassLoader
-        ClassLoader.getSystemClassLoader()
-    }
+    val useDaemon = false // set to true to run with Kotlin Daemon; false for in-process
 
-    // Robust load: try API v2 direct, then fall back to v1 adapter via compat.
-    // Also set TCCL to ensure ServiceLoader and reflective loads use the same CL.
-    val prevCl = Thread.currentThread().contextClassLoader
-    Thread.currentThread().contextClassLoader = classLoader
-    val toolchain = try {
-        try {
-            KotlinToolchain.loadImplementation(classLoader)
-        } catch (e: IllegalStateException) {
-            // Fallback to CompilationService if KotlinToolchain is not available
-            val cs = CompilationService.loadImplementation(classLoader)
-            val adapter = Class.forName(
-                "org.jetbrains.kotlin.buildtools.internal.compat.KotlinToolchainV1Adapter",
-                true,
-                classLoader
-            )
-            val ctor = adapter.getConstructor(CompilationService::class.java)
-            ctor.newInstance(cs) as KotlinToolchain
-        }
-    } finally {
-        Thread.currentThread().contextClassLoader = prevCl
-    }
-    
-    // Log for compiler version
+    // Load toolchain for the chosen mode
+    val toolchain = useDaemon.loadKotlinToolchain()
+
+    // Log compiler version
     println("toolchain.getCompilerVersion() = ${toolchain.getCompilerVersion()}")
-    
+
     // Create a compilation operation
     val operation = toolchain.jvm.createJvmCompilationOperation(listOf(src), outDir)
-    
+
     // Basic configuration
     val args = operation.compilerArguments
     args[JvmCompilerArguments.JVM_TARGET] = JvmTarget.JVM_17
-    args[JvmCompilerArguments.MODULE_NAME] = "sample"
+    args[JvmCompilerArguments.MODULE_NAME] = "KT-78196-sample"
     args[JvmCompilerArguments.NO_REFLECT] = true
     args[JvmCompilerArguments.NO_STDLIB] = true
-    
-    // Add kotlin-stdlib to classpath
-    val stdlibJar = KotlinVersion::class.java.protectionDomain.codeSource.location.path
-    args[JvmCompilerArguments.CLASSPATH] = stdlibJar
-    
-    // Choose execution policy
-    val policy = if (useDaemon) {
-        toolchain.createDaemonExecutionPolicy()
-    } else {
-        toolchain.createInProcessExecutionPolicy()
+
+    // Add kotlin-stdlib matching the compiler version to the classpath
+    run {
+        val compilerVersion = toolchain.getCompilerVersion()
+        fun findStdlibInGradleCache(version: String): String? {
+            val userHome = System.getProperty("user.home") ?: return null
+            val base = java.nio.file.Paths.get(userHome, ".gradle", "caches", "modules-2", "files-2.1", "org.jetbrains.kotlin", "kotlin-stdlib", version)
+            if (!Files.exists(base)) return null
+            // Prefer jar with exact file name match kotlin-stdlib-<version>.jar, otherwise take any jar found
+            val jar = Files.walk(base).use { stream ->
+                stream.filter { Files.isRegularFile(it) && it.toString().endsWith(".jar") }
+                    .sorted()
+                    .toList()
+                    .firstOrNull { it.fileName.toString() == "kotlin-stdlib-$version.jar" }
+                    ?: run {
+                        Files.walk(base).use { s2 ->
+                            s2.filter { Files.isRegularFile(it) && it.toString().endsWith(".jar") }
+                                .findFirst()
+                                .orElse(null)
+                        }
+                    }
+            }
+            return jar?.toString()
+        }
+
+        val stdlibFromCache = findStdlibInGradleCache(compilerVersion)
+        if (stdlibFromCache != null) {
+            args[JvmCompilerArguments.CLASSPATH] = stdlibFromCache
+        } else {
+            // Fallback: use any kotlin-stdlib from the current process classpath (may be a different version)
+            val cpUrls = ClasspathUtils.buildCurrentProcessClasspathUrls()
+            val stdlibEntries = cpUrls.map { it.file }.filter { it.contains("kotlin-stdlib") }
+            if (stdlibEntries.isNotEmpty()) {
+                println("WARN: kotlin-stdlib $compilerVersion not found in Gradle cache; falling back to process classpath stdlib(s), which may be a different version.")
+                args[JvmCompilerArguments.CLASSPATH] = stdlibEntries.joinToString(java.io.File.pathSeparator)
+            } else {
+                println("WARN: No kotlin-stdlib found; compilation will likely fail due to missing stdlib on classpath.")
+            }
+        }
     }
-    
+
+    // Log classpath used (one entry per line)
+    run {
+        val cp = args[JvmCompilerArguments.CLASSPATH].orEmpty()
+        if (cp.isNotBlank()) {
+            println("Classpath used:")
+            cp.split(java.io.File.pathSeparator).filter { it.isNotBlank() }.forEach { println(it) }
+        }
+    }
+
+    // Choose an execution policy
+    val policy = if (useDaemon) toolchain.createDaemonExecutionPolicy() else toolchain.createInProcessExecutionPolicy()
+
     // Simple logger
     val logger = object : KotlinLogger {
         override fun error(msg: String, throwable: Throwable?) = println("ERROR: $msg")
@@ -101,13 +109,13 @@ fun main() {
         override val isDebugEnabled: Boolean = false
         override fun debug(msg: String) = println("DEBUG: $msg")
     }
-    
+
     // Execute compilation
     toolchain.createBuildSession().use { session ->
         val result = session.executeOperation(operation, policy, logger)
         println("Compilation result: $result")
         println("Output directory: $outDir")
-        
+
         // List produced files
         val produced = outDir.toFile().walkTopDown()
             .filter { it.isFile }
@@ -115,8 +123,75 @@ fun main() {
             .toList()
         println("Produced files: ${produced.joinToString(", ")}")
     }
-    
+
     // Force process termination to prevent hanging
-    println("d: Forcing process termination to prevent hanging")
+    println("DEBUG: Forcing process termination to prevent hanging")
     exitProcess(0)
 }
+
+@OptIn(ExperimentalBuildToolsApi::class)
+private fun Boolean.loadKotlinToolchain(): KotlinToolchain {
+    val classLoader: ClassLoader = if (this) {
+        // Daemon mode: isolate implementation classes, but keep API from parent (stdlib + Build Tools API)
+        // Use sane defaults so callers don't need to know the exact package list
+        ClasspathUtils.createChildFirstUrlClassLoaderWithSystemParent()
+    } else {
+        // In-process: use the system classloader
+        ClassLoader.getSystemClassLoader()
+    }
+
+    val thread = Thread.currentThread()
+    val prevCl = thread.contextClassLoader
+    thread.contextClassLoader = classLoader
+
+    return try {
+        // Prefer API v2
+        KotlinToolchain.loadImplementation(classLoader)
+    } catch (_: IllegalStateException) {
+        // Fallback to v1 via compat adapter
+        val cs = CompilationService.loadImplementation(classLoader)
+        val adapter = Class.forName(
+            "org.jetbrains.kotlin.buildtools.internal.compat.KotlinToolchainV1Adapter",
+            true,
+            classLoader
+        )
+        val ctor = adapter.getConstructor(CompilationService::class.java)
+        ctor.newInstance(cs) as KotlinToolchain
+    }
+    finally {
+        thread.contextClassLoader = prevCl
+    }
+}
+
+
+
+/*
+Doesn't work without a manual fallback to v1 via compat adapter
+
+Exception in thread "main" java.lang.IllegalStateException: The classpath contains no implementation for org.jetbrains.kotlin.buildtools.api.KotlinToolchain
+	at org.jetbrains.kotlin.buildtools.api.SharedApiClassesClassLoader.loadImplementation(SharedApiClassesClassLoader.kt:29)
+	at org.jetbrains.kotlin.buildtools.api.KotlinToolchain$Companion.loadImplementation(KotlinToolchain.kt:117)
+	at MainKt.loadKotlinToolchain(Main.kt:179)
+	at MainKt.main(Main.kt:35)
+	at MainKt.main(Main.kt)
+ */
+
+
+//@OptIn(ExperimentalBuildToolsApi::class)
+//private fun Boolean.loadKotlinToolchain(): KotlinToolchain {
+//    val classLoader: ClassLoader = if (this) {
+//        ClasspathUtils.createChildFirstUrlClassLoaderWithSystemParent()
+//    } else {
+//        ClassLoader.getSystemClassLoader()
+//    }
+//
+//    val thread = Thread.currentThread()
+//    val prevCl = thread.contextClassLoader
+//    thread.contextClassLoader = classLoader
+//
+//    try {
+//        return KotlinToolchain.loadImplementation(classLoader)
+//    } finally {
+//        thread.contextClassLoader = prevCl
+//    }
+//}

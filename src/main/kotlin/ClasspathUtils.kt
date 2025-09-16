@@ -21,17 +21,6 @@ object ClasspathUtils {
     }
 
     /**
-     * Creates a URLClassLoader over the current process classpath with the system classloader
-     * as parent. Parent-first delegation ensures shared API types are not duplicated.
-     */
-    @JvmStatic
-    fun createUrlClassLoaderWithSystemParent(): URLClassLoader {
-        val system = ClassLoader.getSystemClassLoader()
-        val urls = buildCurrentProcessClasspathUrls()
-        return URLClassLoader(urls, system)
-    }
-
-    /**
      * Child-first URLClassLoader that delegates specific package prefixes to the parent first.
      * This allows us to share API classes from the parent while loading implementation classes
      * (that might also be present on the parent) from this child to satisfy URLClassLoader
@@ -65,14 +54,24 @@ object ClasspathUtils {
         }
     }
 
+    private val DEFAULT_PARENT_FIRST_PREFIXES = listOf(
+        // Kotlin standard library packages
+        "kotlin.",
+        "kotlinx.",
+        // Build Tools API must be shared with the parent to avoid duplicate API classes
+        "org.jetbrains.kotlin.buildtools.api."
+    )
+
+    /**
+     * Creates a child-first URLClassLoader for daemon usage with system classloader as parent and
+     * a safe default parent-first list (Kotlin stdlib + Build Tools API). Use this unless you have
+     * very specific needs.
+     */
     @JvmStatic
-    fun createChildFirstUrlClassLoaderWithSystemParent(parentFirstPrefixes: List<String>): URLClassLoader {
+    fun createChildFirstUrlClassLoaderWithSystemParent(): URLClassLoader {
         val parent = ClassLoader.getSystemClassLoader()
         val urls = buildCurrentProcessClasspathUrls()
-        // Always ensure API package is delegated to parent first to avoid duplicate API classes
-        val combinedPrefixes =
-            if (parentFirstPrefixes.any { it == "org.jetbrains.kotlin.buildtools.api." }) parentFirstPrefixes
-            else parentFirstPrefixes + "org.jetbrains.kotlin.buildtools.api."
-        return ChildFirstUrlClassLoader(urls, parent, combinedPrefixes)
+        return ChildFirstUrlClassLoader(urls, parent, DEFAULT_PARENT_FIRST_PREFIXES)
     }
+
 }
