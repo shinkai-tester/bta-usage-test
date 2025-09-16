@@ -9,6 +9,7 @@ import org.jetbrains.kotlin.buildtools.api.jvm.operations.JvmCompilationOperatio
 import org.jetbrains.kotlin.buildtools.api.trackers.BuildMetricsCollector
 import org.jetbrains.kotlin.buildtools.api.trackers.CompilerLookupTracker
 import kotlin.io.path.createDirectories
+import kotlin.system.exitProcess
 
 @OptIn(ExperimentalBuildToolsApi::class, ExperimentalCompilerArgument::class)
 fun main() {
@@ -56,7 +57,7 @@ fun main() {
 
     // --- 4) Choose execution policy ---
     val policy: ExecutionPolicy = if (useDaemon) toolchain.createDaemonExecutionPolicy() else toolchain.createInProcessExecutionPolicy()
-    if (useDaemon) policy.configureDaemon(listOf("-Xmx3g", "-Xms1g"), 2000)
+    if (useDaemon) policy.configureDaemon(listOf("Xmx3g", "Xms1g"), 2000)
 
     // --- 5) Logger with debug enabled to print the desired "d:" lines ---
     val logger = object : KotlinLogger {
@@ -83,5 +84,9 @@ fun main() {
 
     val produced = outDir.toFile().walkTopDown().filter { it.isFile }.map { it.relativeTo(outDir.toFile()).path }.toList()
     println("Produced files (relative to out):\n" + produced.joinToString(System.lineSeparator()))
+
+    // Force process termination to prevent hanging
+    println("d: Forcing process termination to prevent hanging")
+    exitProcess(0)
 }
 
