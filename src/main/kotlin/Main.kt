@@ -2,6 +2,7 @@ import org.jetbrains.kotlin.buildtools.api.*
 import org.jetbrains.kotlin.buildtools.api.arguments.ExperimentalCompilerArgument
 import org.jetbrains.kotlin.buildtools.api.arguments.JvmCompilerArguments
 import org.jetbrains.kotlin.buildtools.api.arguments.enums.JvmTarget
+import java.net.URLClassLoader
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
@@ -9,7 +10,8 @@ import kotlin.io.path.writeText
 import kotlin.system.exitProcess
 
 @OptIn(ExperimentalBuildToolsApi::class, ExperimentalCompilerArgument::class)
-fun main() {
+fun main(args: Array<String>) {
+    println("Compiler classpath: ${args.joinToString(java.io.File.pathSeparator)}")
     // Create a test source file
     val tmpDir: Path = Files.createTempDirectory("bta-usage-KT-78196")
     val outDir: Path = tmpDir.resolve("out").createDirectories()
@@ -30,9 +32,9 @@ fun main() {
 
     // Choose execution mode
     val useDaemon = false // set to true to run with Kotlin Daemon; false for in-process
+    val compilerClassloader = URLClassLoader(args.map { Path.of(it).toUri().toURL() }.toTypedArray(), SharedApiClassesClassLoader())
 
-    // Load toolchain for the chosen mode
-    val toolchain = useDaemon.loadKotlinToolchain()
+    val toolchain = KotlinToolchain.loadImplementation(compilerClassloader)
 
     // Log compiler version
     println("toolchain.getCompilerVersion() = ${toolchain.getCompilerVersion()}")
@@ -128,70 +130,3 @@ fun main() {
     println("DEBUG: Forcing process termination to prevent hanging")
     exitProcess(0)
 }
-
-@OptIn(ExperimentalBuildToolsApi::class)
-private fun Boolean.loadKotlinToolchain(): KotlinToolchain {
-    val classLoader: ClassLoader = if (this) {
-        // Daemon mode: isolate implementation classes, but keep API from parent (stdlib + Build Tools API)
-        // Use sane defaults so callers don't need to know the exact package list
-        ClasspathUtils.createChildFirstUrlClassLoaderWithSystemParent()
-    } else {
-        // In-process: use the system classloader
-        ClassLoader.getSystemClassLoader()
-    }
-
-    val thread = Thread.currentThread()
-    val prevCl = thread.contextClassLoader
-    thread.contextClassLoader = classLoader
-
-    return try {
-        // Prefer API v2
-        KotlinToolchain.loadImplementation(classLoader)
-    } catch (_: IllegalStateException) {
-        // Fallback to v1 via compat adapter
-        val cs = CompilationService.loadImplementation(classLoader)
-        val adapter = Class.forName(
-            "org.jetbrains.kotlin.buildtools.internal.compat.KotlinToolchainV1Adapter",
-            true,
-            classLoader
-        )
-        val ctor = adapter.getConstructor(CompilationService::class.java)
-        ctor.newInstance(cs) as KotlinToolchain
-    }
-    finally {
-        thread.contextClassLoader = prevCl
-    }
-}
-
-
-
-/*
-Doesn't work without a manual fallback to v1 via compat adapter
-
-Exception in thread "main" java.lang.IllegalStateException: The classpath contains no implementation for org.jetbrains.kotlin.buildtools.api.KotlinToolchain
-	at org.jetbrains.kotlin.buildtools.api.SharedApiClassesClassLoader.loadImplementation(SharedApiClassesClassLoader.kt:29)
-	at org.jetbrains.kotlin.buildtools.api.KotlinToolchain$Companion.loadImplementation(KotlinToolchain.kt:117)
-	at MainKt.loadKotlinToolchain(Main.kt:179)
-	at MainKt.main(Main.kt:35)
-	at MainKt.main(Main.kt)
- */
-
-
-//@OptIn(ExperimentalBuildToolsApi::class)
-//private fun Boolean.loadKotlinToolchain(): KotlinToolchain {
-//    val classLoader: ClassLoader = if (this) {
-//        ClasspathUtils.createChildFirstUrlClassLoaderWithSystemParent()
-//    } else {
-//        ClassLoader.getSystemClassLoader()
-//    }
-//
-//    val thread = Thread.currentThread()
-//    val prevCl = thread.contextClassLoader
-//    thread.contextClassLoader = classLoader
-//
-//    try {
-//        return KotlinToolchain.loadImplementation(classLoader)
-//    } finally {
-//        thread.contextClassLoader = prevCl
-//    }
-//}
