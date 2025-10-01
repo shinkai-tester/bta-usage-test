@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.buildtools.api.*
+import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain
 import org.jetbrains.kotlin.buildtools.api.jvm.operations.JvmCompilationOperation
 import java.nio.file.Path
 
@@ -41,12 +42,12 @@ object CompilationTestUtils {
      */
     @JvmStatic
     fun newJvmOp(
-        toolchain: KotlinToolchain,
+        toolchain: KotlinToolchains,
         sources: List<Path>,
         outDir: Path,
         framework: BtaTestFramework
     ): JvmCompilationOperation {
-        val op = toolchain.jvm.createJvmCompilationOperation(sources, outDir)
+        val op = toolchain.getToolchain<JvmPlatformToolchain>().createJvmCompilationOperation(sources, outDir)
         framework.configureMinimalCompilation(op)
         return op
     }
@@ -61,7 +62,7 @@ object CompilationTestUtils {
      */
     @JvmStatic
     fun runCompile(
-        toolchain: KotlinToolchain,
+        toolchain: KotlinToolchains,
         op: JvmCompilationOperation,
         logger: KotlinLogger? = null
     ): CompilationResult {
@@ -82,7 +83,7 @@ object CompilationTestUtils {
      */
     @JvmStatic
     fun runCompile(
-        toolchain: KotlinToolchain,
+        toolchain: KotlinToolchains,
         op: JvmCompilationOperation,
         executionPolicy: ExecutionPolicy,
         logger: KotlinLogger? = null

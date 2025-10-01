@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.buildtools.api.*
+import org.jetbrains.kotlin.buildtools.api.arguments.ExperimentalCompilerArgument
 import org.jetbrains.kotlin.buildtools.api.arguments.JvmCompilerArguments
 import org.jetbrains.kotlin.buildtools.api.jvm.JvmSnapshotBasedIncrementalCompilationConfiguration
 import org.jetbrains.kotlin.buildtools.api.jvm.JvmSnapshotBasedIncrementalCompilationOptions
@@ -8,7 +9,7 @@ import java.nio.file.Path
 /**
  * Utilities for incremental compilation testing, providing helper methods for IC configuration.
  */
-@OptIn(ExperimentalBuildToolsApi::class)
+@OptIn(ExperimentalBuildToolsApi::class, ExperimentalCompilerArgument::class)
 object IncrementalCompilationUtils {
     
     /**
@@ -30,7 +31,7 @@ object IncrementalCompilationUtils {
         configure: (JvmSnapshotBasedIncrementalCompilationOptions) -> Unit = {}
     ): JvmSnapshotBasedIncrementalCompilationConfiguration {
         // Create IC options, set what we need, allow customization
-        val dummyOpForOptions = object : JvmCompilationOperation {
+        object : JvmCompilationOperation {
             override val compilerArguments: JvmCompilerArguments
                 get() = throw UnsupportedOperationException()
             override fun createSnapshotBasedIcOptions(): JvmSnapshotBasedIncrementalCompilationOptions =
@@ -54,7 +55,6 @@ object IncrementalCompilationUtils {
                 @Suppress("UNCHECKED_CAST")
                 override fun <V> get(key: JvmSnapshotBasedIncrementalCompilationOptions.Option<V>): V = map[key] as V
                 override fun <V> set(key: JvmSnapshotBasedIncrementalCompilationOptions.Option<V>, value: V) { map[key] = value }
-                fun hasKey(key: JvmSnapshotBasedIncrementalCompilationOptions.Option<*>): Boolean = map.containsKey(key)
             }
         ).also { cfg ->
             configure(cfg.options)

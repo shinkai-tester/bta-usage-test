@@ -1,5 +1,5 @@
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
-import org.jetbrains.kotlin.buildtools.api.KotlinToolchain
+import org.jetbrains.kotlin.buildtools.api.KotlinToolchains
 import org.jetbrains.kotlin.buildtools.api.ExecutionPolicy
 import org.jetbrains.kotlin.buildtools.api.jvm.operations.JvmCompilationOperation
 import java.nio.file.Path
@@ -65,9 +65,9 @@ class BtaTestFramework {
      * 
      * @param useDaemon If true, uses URLClassLoader and sets it as TCCL during initialization.
      *                  If false, uses system/application classloader.
-     * @return Configured KotlinToolchain instance
+     * @return Configured KotlinToolchains instance
      */
-    fun loadToolchain(useDaemon: Boolean = false): KotlinToolchain {
+    fun loadToolchain(useDaemon: Boolean = false): KotlinToolchains {
         return toolchainManager.loadToolchain(useDaemon)
     }
 
@@ -77,7 +77,7 @@ class BtaTestFramework {
      * @param toolchain The Kotlin toolchain to create the daemon execution policy for
      * @return Configured ExecutionPolicy for daemon usage
      */
-    fun createDaemonExecutionPolicy(toolchain: KotlinToolchain): ExecutionPolicy {
+    fun createDaemonExecutionPolicy(toolchain: KotlinToolchains): ExecutionPolicy {
         return toolchainManager.createDaemonExecutionPolicy(toolchain)
     }
 

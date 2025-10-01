@@ -3,14 +3,14 @@
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 
 plugins {
-    kotlin("jvm") version "2.3.0-dev-7798"
-    kotlin("plugin.power-assert") version "2.3.0-dev-7798"
+    kotlin("jvm") version "2.3.0-dev-9489"
+    kotlin("plugin.power-assert") version "2.3.0-dev-9489"
 }
 
 dependencies {
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.0-dev-7798")
-    implementation("org.jetbrains.kotlin:kotlin-build-tools-api:2.3.0-dev-7798")
-    runtimeOnly("org.jetbrains.kotlin:kotlin-build-tools-impl:2.3.0-dev-7798")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.0-dev-9489")
+    implementation("org.jetbrains.kotlin:kotlin-build-tools-api:2.3.0-dev-9489")
+    runtimeOnly("org.jetbrains.kotlin:kotlin-build-tools-impl:2.3.0-dev-9489")
 
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.13.4")

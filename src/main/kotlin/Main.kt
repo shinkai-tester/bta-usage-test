@@ -5,6 +5,8 @@ import org.jetbrains.kotlin.buildtools.api.KotlinLogger
 import org.jetbrains.kotlin.buildtools.api.arguments.ExperimentalCompilerArgument
 import org.jetbrains.kotlin.buildtools.api.arguments.JvmCompilerArguments
 import org.jetbrains.kotlin.buildtools.api.arguments.enums.JvmTarget
+import org.jetbrains.kotlin.buildtools.api.getToolchain
+import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain
 import org.jetbrains.kotlin.buildtools.api.jvm.operations.JvmCompilationOperation
 import org.jetbrains.kotlin.buildtools.api.trackers.BuildMetricsCollector
 import org.jetbrains.kotlin.buildtools.api.trackers.CompilerLookupTracker
@@ -34,7 +36,7 @@ fun main() {
     val toolchain = framework.loadToolchain(useDaemon)
 
     // --- 3) Create operation and configure using infrastructure ---
-    val op = toolchain.jvm.createJvmCompilationOperation(listOf(src), outDir)
+    val op = toolchain.getToolchain<JvmPlatformToolchain>().createJvmCompilationOperation(listOf(src), outDir)
     framework.configureMinimalCompilation(op)
     
     // Override specific settings for this example
