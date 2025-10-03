@@ -24,8 +24,9 @@
  *   so you can switch versions without changing the app code.
  */
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
-import org.jetbrains.kotlin.buildtools.api.KotlinToolchain
+import org.jetbrains.kotlin.buildtools.api.KotlinToolchains
 import org.jetbrains.kotlin.buildtools.api.SharedApiClassesClassLoader
+import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain.Companion.jvm
 import org.jetbrains.kotlin.buildtools.api.arguments.ExperimentalCompilerArgument
 import org.jetbrains.kotlin.buildtools.api.arguments.JvmCompilerArguments
 import org.jetbrains.kotlin.buildtools.api.arguments.enums.JvmTarget
@@ -42,7 +43,7 @@ import kotlin.system.exitProcess
  *   allowing you to swap the compiler version independently of the app's compile/runtime classpath.
  *
  * Notes
- * - The toolchain is loaded via KotlinToolchain.loadImplementation from the provided classloader.
+ * - The toolchain is loaded via KotlinToolchains.loadImplementation from the provided classloader.
  * - If the selected compiler only implements BTA v1, kotlin-build-tools-compat will adapt calls
  *   from v2 API used by this program to v1 at runtime.
  */
@@ -56,7 +57,7 @@ fun main(args: Array<String>) {
 
     // Set up the compiler toolchain
     val compilerClassloader = URLClassLoader(args.map { Path.of(it).toUri().toURL() }.toTypedArray(), SharedApiClassesClassLoader())
-    val toolchain = KotlinToolchain.loadImplementation(compilerClassloader)
+    val toolchain = KotlinToolchains.loadImplementation(compilerClassloader)
     
     println("toolchain.getCompilerVersion() = ${toolchain.getCompilerVersion()}")
 

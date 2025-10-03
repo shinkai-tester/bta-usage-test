@@ -20,7 +20,7 @@ With `kotlin-build-tools-compat` on the app classpath, when you run against a co
 ## Project layout
 
 - `src/main/kotlin/Main.kt` — minimal example that:
-  - Loads a `KotlinToolchain` using a classloader built from the provided compiler implementation jars.
+  - Loads a `KotlinToolchains` using a classloader built from the provided compiler implementation jars.
   - Configures and runs a small JVM compilation using BTA v2.
   - Prints the selected compiler version and compilation results.
 - `src/main/kotlin/ClasspathUtils.kt` — small helper for reading the current process classpath and converting it to URL entries.

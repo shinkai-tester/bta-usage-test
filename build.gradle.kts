@@ -14,10 +14,16 @@ dependencies {
 
     "myCompiler"("org.jetbrains.kotlin:kotlin-build-tools-impl:2.0.20")
     "myCompiler"("org.jetbrains.kotlin:kotlin-build-tools-compat:2.3.255-SNAPSHOT")
+    
+    testImplementation(kotlin("test"))
 }
 
 tasks.register<JavaExec>("run") {
     classpath = sourceSets.main.get().runtimeClasspath
     mainClass.set("MainKt")
     args = configurations.getByName("myCompiler").files.map { it.absolutePath }
+}
+
+tasks.test {
+    systemProperty("test.compiler.classpath", configurations.getByName("myCompiler").files.joinToString(File.pathSeparator) { it.absolutePath })
 }
