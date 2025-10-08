@@ -25,6 +25,10 @@ class TestLogger(
     // Capture + print error messages
     override fun error(msg: String, throwable: Throwable?) {
         errorMessages.add(msg)
+        if (throwable != null) {
+            // capture throwable details to make assertions possible in tests
+            errorMessages.add(throwable.message ?: throwable.toString())
+        }
         print("e:", msg, throwable)
     }
 
@@ -36,6 +40,9 @@ class TestLogger(
 
     override fun warn(msg: String, throwable: Throwable?) {
         warnMessages.add(msg)
+        if (throwable != null) {
+            warnMessages.add(throwable.message ?: throwable.toString())
+        }
         print("w:", msg, throwable)
     }
 

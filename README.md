@@ -70,3 +70,14 @@
 - ✅ **Common compiler arguments** checks languageVersion, apiVersion, progressive mode, and opt-in markers
 - ✅ **JVM-specific arguments** checks jvmTarget (e.g., 17 → classfile major 61), moduleName, and -java-parameters flag
 - ✅ **Error handling** ensures unresolved references are reported when stdlib is excluded or classpath is invalid
+
+
+##### 5. `CompilerArgumentsLifecycleTest.kt` - Compiler Arguments Lifecycle and Validation
+Purpose: validates lifecycle attributes on compiler arguments (experimental/deprecated/removed), parsing errors for argument strings, and availability guards tied to Build Tools API versions.
+
+What it tests:
+- ✅ Experimental options with explicit opt-in compile successfully (e.g., X_NO_INLINE, X_DEBUG)
+- ✅ Removed options produce a clear failure either via exception or a compilation error; diagnostics must mention the option being removed and an unrecognized parameter
+- ✅ Deprecated options still work with opt-in (no requirement for runtime deprecation log)
+- ✅ applyArgumentStrings reports missing value with CompilerArgumentsParseException
+- ✅ Setting an argument whose availableSinceVersion is greater than the current BTA version fails early with a helpful message
