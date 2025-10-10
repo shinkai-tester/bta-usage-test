@@ -14,7 +14,12 @@ import kotlin.io.path.createDirectories
 import kotlin.system.exitProcess
 
 @OptIn(ExperimentalBuildToolsApi::class, ExperimentalCompilerArgument::class)
-fun main() {
+fun main(vararg implClasspath: String) {
+    // If the implementation classpath is provided as program args, publish it via system property
+    if (implClasspath.isNotEmpty()) {
+        System.setProperty("compiler.impl.classpath", implClasspath.joinToString(java.io.File.pathSeparator))
+    }
+
     // --- 1) Use infrastructure to prepare workspace and source ---
     val framework = BtaTestFramework()
     val workspace = framework.createTempWorkspace()
@@ -31,7 +36,7 @@ fun main() {
         }
     """)
 
-    // --- 2) Load toolchain using infrastructure ---
+    // --- 2) Load toolchain using isolated classloader (via framework/manager) ---
     val useDaemon = false // set to true if you want to test daemon; logs differ slightly
     val toolchain = framework.loadToolchain(useDaemon)
 
