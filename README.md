@@ -8,6 +8,10 @@ This repository demonstrates how to use the Kotlin Build Tools API (BTA) while s
 
 Official BTA documentation: https://kotlinlang.org/docs/build-tools-api.html
 
+Additional resources:
+- [kotlin-build-tools-api README](https://github.com/JetBrains/kotlin/blob/master/compiler/build-tools/kotlin-build-tools-api/README.md)
+- [kotlin-build-tools-compat README](https://github.com/JetBrains/kotlin/blob/master/compiler/build-tools/kotlin-build-tools-compat/README.md)
+
 ## Compatibility window
 
 The Kotlin Build Tools API supports a moving window across Kotlin compiler major versions:
@@ -73,6 +77,12 @@ The output will include:
 - Execution policy: the sample can run either in-process or with the Kotlin Daemon. Toggle the `useDaemon` flag in `Main.kt` to switch.
 - Standard library: the example tries to find a `kotlin-stdlib` jar whose version matches the selected compiler in your Gradle cache. If it can’t, it falls back to any `kotlin-stdlib` found on the current process classpath and prints a warning.
 - No code changes are needed to switch compiler versions; only the `myCompiler` dependencies affect which compiler impl is used at runtime.
+
+## Tests
+
+- Gradle is configured to pass a `test.compiler.classpath` system property to tests with the files from the `myCompiler` configuration.
+- To run tests: `./gradlew test` (Unix) or `gradlew.bat test` (Windows).
+- Shared test base class `TestBase` lives under `src/test/kotlin` to avoid repetition (e.g., loading a toolchain, creating test sources, and asserting class file output). Tests `CompilerArgumentsLifecycleTest` and `ErrorScenarioDemonstrationTest` extend this base class. Source file creation logic remains in `src/main/kotlin/CompilationUtils.kt`, with `TestBase` providing helper methods for tests.
 
 ## Licenses
 

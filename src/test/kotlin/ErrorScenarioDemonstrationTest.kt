@@ -1,10 +1,6 @@
 import org.jetbrains.kotlin.buildtools.api.BuildOperation
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
 import org.jetbrains.kotlin.buildtools.api.KotlinToolchains
-import org.jetbrains.kotlin.buildtools.api.SharedApiClassesClassLoader
-import java.io.File
-import java.net.URLClassLoader
-import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -18,7 +14,7 @@ import kotlin.test.assertFailsWith
  * 2. Executing an unsupported operation type
  */
 @OptIn(ExperimentalBuildToolsApi::class)
-class ErrorScenarioDemonstrationTest {
+class ErrorScenarioDemonstrationTest : TestBase() {
     
     /**
      * A fake toolchain interface to simulate requesting an unsupported toolchain type.
@@ -41,22 +37,6 @@ class ErrorScenarioDemonstrationTest {
         }
     }
     
-    /**
-     * Helper function to load the toolchain from the compiler classpath.
-     * This mimics what Main.kt does but for testing purposes.
-     */
-    private fun loadToolchain(): KotlinToolchains {
-        // Get compiler classpath from system property (set by a Gradle test task)
-        val compilerClasspath = System.getProperty("test.compiler.classpath")
-            ?: error("test.compiler.classpath system property not set")
-        
-        val compilerUrls = compilerClasspath.split(File.pathSeparator)
-            .map { Path.of(it).toUri().toURL() }
-            .toTypedArray()
-        
-        val compilerClassloader = URLClassLoader(compilerUrls, SharedApiClassesClassLoader())
-        return KotlinToolchains.loadImplementation(compilerClassloader)
-    }
     
     /**
      * Tests that requesting an unsupported platform toolchain type throws the correct error.
@@ -68,13 +48,13 @@ class ErrorScenarioDemonstrationTest {
     @Test
     fun testUnsupportedPlatformToolchainError() {
         val toolchain = loadToolchain()
-        
+
         val exception = assertFailsWith<IllegalStateException> {
             toolchain.getToolchain(FakePlatformToolchain::class.java)
         }
-        
-        println("✓ Unsupported Platform Toolchain Error:")
-        println("  ${exception.message}")
+
+        logger.info("✓ Unsupported Platform Toolchain Error:")
+        logger.info("  ${exception.message}")
 
         assertEquals(exception.message?.contains("Unsupported platform toolchain type"), true)
         assertEquals(exception.message?.contains("Only JVM compilation is supported"), true)
@@ -95,14 +75,14 @@ class ErrorScenarioDemonstrationTest {
         val exception = assertFailsWith<IllegalStateException> {
             val fakeOperation = FakeOperation()
             val policy = toolchain.createInProcessExecutionPolicy()
-            
+
             toolchain.createBuildSession().use { session ->
-                session.executeOperation(fakeOperation, policy, null)
+                session.executeOperation(fakeOperation, policy, logger)
             }
         }
-        
-        println("✓ Unsupported Operation Type Error:")
-        println("  ${exception.message}")
+
+        logger.info("✓ Unsupported Operation Type Error:")
+        logger.info("  ${exception.message}")
 
         assertEquals(exception.message?.contains("Unsupported operation type"), true)
         assertEquals(exception.message?.contains("BTA API v1 fallback"), true)

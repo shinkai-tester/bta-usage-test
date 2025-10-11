@@ -53,7 +53,19 @@ fun main(args: Array<String>) {
     
     // Create temporary directories and test source
     val (tmpDir, outDir) = CompilationUtils.createTempDirectories()
-    val src = CompilationUtils.createTestSource(tmpDir)
+    val src = CompilationUtils.createTestSource(
+        tmpDir,
+        sourceContent = $$"""
+            package demo
+
+            data class User(val name: String, val age: Int)
+
+            fun main() {
+                val user = User("Alice", 30)
+                println("User: ${user.name}, Age: ${user.age}")
+            }
+        """.trimIndent()
+    )
 
     // Set up the compiler toolchain
     val compilerClassloader = URLClassLoader(args.map { Path.of(it).toUri().toURL() }.toTypedArray(), SharedApiClassesClassLoader())

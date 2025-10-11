@@ -14,39 +14,22 @@ import kotlin.io.path.writeText
 object CompilationUtils {
     
     /**
-     * Creates a temporary test source file with a Kotlin program.
-     * 
-     * @param tmpDir The temporary directory where the source file should be created
+     * Creates a source file with the provided Kotlin program content.
+     *
+     * @param tmpDir The directory where the source file should be created
      * @param fileName The name of the source file to create (default: "Hello.kt")
-     * @param sourceContent The Kotlin source code content (default: a simple Hello World program)
+     * @param sourceContent The Kotlin source code content (must be provided explicitly)
      * @return The path to the created source file
      */
     fun createTestSource(
-        tmpDir: Path, 
+        tmpDir: Path,
         fileName: String = "Hello.kt",
-        sourceContent: String = getDefaultTestSource()
+        sourceContent: String
     ): Path {
         val src = tmpDir.resolve(fileName)
         src.writeText(sourceContent)
         return src
     }
-    
-    /**
-     * Provides the default test source code for compilation testing.
-     * 
-     * @return A simple Kotlin program with a class and main function
-     */
-    private fun getDefaultTestSource(): String = """
-        package sample
-        
-        class Greeter {
-            fun hello(): String = "Hello, World!"
-        }
-        
-        fun main() {
-            println(Greeter().hello())
-        }
-        """.trimIndent()
     
     /**
      * Creates the necessary temporary directories for compilation.
