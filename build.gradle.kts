@@ -4,8 +4,8 @@ import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import java.io.File
 
 plugins {
-    kotlin("jvm") version "2.3.0-Beta1"
-    kotlin("plugin.power-assert") version "2.3.0-Beta1"
+    kotlin("jvm") version "2.3.0-Beta2"
+    kotlin("plugin.power-assert") version "2.3.0-Beta2"
 }
 
 configurations {
@@ -13,11 +13,11 @@ configurations {
 }
 
 dependencies {
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.0-Beta1")
-    implementation("org.jetbrains.kotlin:kotlin-build-tools-api:2.3.0-Beta1")
-    runtimeOnly("org.jetbrains.kotlin:kotlin-reflect:2.3.0-Beta1")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.0-Beta2")
+    implementation("org.jetbrains.kotlin:kotlin-build-tools-api:2.3.0-Beta2")
+    runtimeOnly("org.jetbrains.kotlin:kotlin-reflect:2.3.0-Beta2")
     // Keep compiler impl off the app classpath; they will be passed explicitly at runtime
-    "myCompiler"("org.jetbrains.kotlin:kotlin-build-tools-impl:2.3.0-Beta1")
+    "myCompiler"("org.jetbrains.kotlin:kotlin-build-tools-impl:2.3.0-Beta2")
 
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.14.0")

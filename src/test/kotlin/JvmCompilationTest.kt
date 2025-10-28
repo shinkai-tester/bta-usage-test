@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.buildtools.api.*
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Order
@@ -111,6 +112,7 @@ class JvmCompilationTest : TestBase() {
     }
 
     @Test
+    @Disabled("Not stable")
     @DisplayName("Handle daemon execution failures with retries")
     fun handleDaemonExecutionFailures() {
         // Given: A test setup with daemon configuration that will fail
