@@ -4,23 +4,26 @@ import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import java.io.File
 
 plugins {
-    kotlin("jvm") version "2.3.0-Beta2"
-    kotlin("plugin.power-assert") version "2.3.0-Beta2"
+    kotlin("jvm") version "2.3.20-Beta1"
+    kotlin("plugin.power-assert") version "2.3.20-Beta1"
 }
 
 configurations {
     create("myCompiler")
+    create("oldCompiler") // For backward compatibility testing (pre-2.3.20)
 }
 
 dependencies {
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.0-Beta2")
-    implementation("org.jetbrains.kotlin:kotlin-build-tools-api:2.3.0-Beta2")
-    runtimeOnly("org.jetbrains.kotlin:kotlin-reflect:2.3.0-Beta2")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.20-Beta1")
+    implementation("org.jetbrains.kotlin:kotlin-build-tools-api:2.3.20-Beta1")
+    runtimeOnly("org.jetbrains.kotlin:kotlin-reflect:2.3.20-Beta1")
     // Keep compiler impl off the app classpath; they will be passed explicitly at runtime
-    "myCompiler"("org.jetbrains.kotlin:kotlin-build-tools-impl:2.3.0-Beta2")
+    "myCompiler"("org.jetbrains.kotlin:kotlin-build-tools-impl:2.3.20-Beta1")
+    // Old compiler for backward compatibility testing (cancellation not supported before 2.3.20)
+    "oldCompiler"("org.jetbrains.kotlin:kotlin-build-tools-impl:2.3.0")
 
     testImplementation(kotlin("test"))
-    testImplementation("org.junit.jupiter:junit-jupiter:5.14.0")
+    testImplementation("org.junit.jupiter:junit-jupiter:6.0.2")
 }
 
 tasks.test {
@@ -30,6 +33,11 @@ tasks.test {
     systemProperty(
         "compiler.impl.classpath",
         configurations.getByName("myCompiler").files.joinToString(File.pathSeparator) { it.absolutePath }
+    )
+    // Provide old compiler classpath for backward compatibility testing
+    systemProperty(
+        "old.compiler.impl.classpath",
+        configurations.getByName("oldCompiler").files.joinToString(File.pathSeparator) { it.absolutePath }
     )
 }
 

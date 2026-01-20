@@ -13,6 +13,11 @@
 - Executing compilation operations
 - Handling results and generated files
 
+Run the example with:
+```bash
+./gradlew run
+```
+
 #### Core framework
 - **`BtaTestFramework.kt`** - main facade providing a simplified interface for testing Kotlin compilation operations. Delegates to specialized managers following Single Responsibility Principle.
 - **`TestLogger.kt`** captures and analyzes compilation log messages, including error tracking and retry count detection.
@@ -29,7 +34,7 @@
 - **`DaemonPolicy.kt`** - configuration and management of daemon execution policies.
 - **`JavaInteropTestScenario.kt`** - specialized test scenario builder for Java-Kotlin interoperability testing.
 
-### Test files (`src/test/kotlin/`)
+### Test files (`src/test/`)
 
 #### Test foundation
 - **`TestBase.kt`** - abstract base class providing common test setup and utility methods. Includes workspace creation, compilation result verification, and class file validation utilities.
@@ -72,12 +77,28 @@
 - ✅ **Error handling** ensures unresolved references are reported when stdlib is excluded or classpath is invalid
 
 
-##### 5. `CompilerArgumentsLifecycleTest.kt` - Compiler Arguments Lifecycle and Validation
-Purpose: validates lifecycle attributes on compiler arguments (experimental/deprecated/removed), parsing errors for argument strings, and availability guards tied to Build Tools API versions.
+##### 5. **`CompilerArgumentsLifecycleTest.kt`** - Compiler Arguments Lifecycle and Validation
+**Purpose**: validates lifecycle attributes on compiler arguments (experimental/deprecated/removed), parsing errors for argument strings, and availability guards tied to Build Tools API versions.
 
-What it tests:
-- ✅ Experimental options with explicit opt-in compile successfully (e.g., X_NO_INLINE, X_DEBUG)
-- ✅ Removed options produce a clear failure either via exception or a compilation error; diagnostics must mention the option being removed and an unrecognized parameter
-- ✅ Deprecated options still work with opt-in (no requirement for runtime deprecation log)
-- ✅ applyArgumentStrings reports missing value with CompilerArgumentsParseException
-- ✅ Setting an argument whose availableSinceVersion is greater than the current BTA version fails early with a helpful message
+**What it tests**:
+- ✅ **Experimental options with explicit opt-in** compile successfully (e.g., X_NO_INLINE, X_DEBUG)
+- ✅ **Removed options** produce a clear failure either via exception or a compilation error; diagnostics must mention the option being removed and an unrecognized parameter
+- ✅ **Deprecated options** still work with opt-in (no requirement for runtime deprecation log)
+- ✅ **applyArgumentStrings** reports missing value with CompilerArgumentsParseException
+- ✅ **Availability guards** setting an argument whose availableSinceVersion is greater than the current BTA version fails early with a helpful message
+
+##### 6. **`CancellationTest.kt`** - Compilation Cancellation Tests
+**Purpose**: verifies that compilation operations can be cancelled correctly.
+
+**What it tests**:
+- ✅ **Non-incremental in-process cancellation** ensures cancellation works for non-incremental compilation with in-process execution strategy
+- ✅ **Non-incremental daemon cancellation** verifies cancellation works for non-incremental compilation with daemon execution strategy
+- ✅ **Incremental in-process cancellation** tests cancellation of incremental compilation with in-process execution strategy
+- ✅ **Incremental daemon cancellation** verifies cancellation of incremental compilation with daemon execution strategy
+- ✅ **Backward compatibility with old compiler** verifies that cancellation throws `IllegalStateException` with compiler version 2.3.0 (cancellation is supported from 2.3.20)
+
+##### 7. **`JvmPlatformToolchainTest.java`** - Java API Compatibility Test
+**Purpose**: verifies that the Build Tools API can be used from Java code.
+
+**What it tests**:
+- ✅ **JvmPlatformToolchain.from() API** ensures Java clients can obtain a JvmPlatformToolchain and compile Kotlin sources using the Java-friendly entrypoint

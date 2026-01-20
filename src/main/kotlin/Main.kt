@@ -1,17 +1,12 @@
-import org.jetbrains.kotlin.buildtools.api.BuildOperation
-import org.jetbrains.kotlin.buildtools.api.ExecutionPolicy
-import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
-import org.jetbrains.kotlin.buildtools.api.KotlinLogger
+import org.jetbrains.kotlin.buildtools.api.*
 import org.jetbrains.kotlin.buildtools.api.arguments.ExperimentalCompilerArgument
 import org.jetbrains.kotlin.buildtools.api.arguments.JvmCompilerArguments
 import org.jetbrains.kotlin.buildtools.api.arguments.enums.JvmTarget
-import org.jetbrains.kotlin.buildtools.api.getToolchain
 import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain
 import org.jetbrains.kotlin.buildtools.api.jvm.operations.JvmCompilationOperation
 import org.jetbrains.kotlin.buildtools.api.trackers.BuildMetricsCollector
 import org.jetbrains.kotlin.buildtools.api.trackers.CompilerLookupTracker
 import kotlin.io.path.createDirectories
-import kotlin.system.exitProcess
 
 @OptIn(ExperimentalBuildToolsApi::class, ExperimentalCompilerArgument::class)
 fun main(vararg implClasspath: String) {
@@ -91,9 +86,5 @@ fun main(vararg implClasspath: String) {
 
     val produced = outDir.toFile().walkTopDown().filter { it.isFile }.map { it.relativeTo(outDir.toFile()).path }.toList()
     println("Produced files (relative to out):\n" + produced.joinToString(System.lineSeparator()))
-
-    // Force process termination to prevent hanging
-    println("d: Forcing process termination to prevent hanging")
-    exitProcess(0)
 }
 
