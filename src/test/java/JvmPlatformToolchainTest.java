@@ -1,12 +1,25 @@
 import org.jetbrains.kotlin.buildtools.api.*;
+import org.jetbrains.kotlin.buildtools.api.arguments.JvmCompilerArguments;
+import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain;
 import org.jetbrains.kotlin.buildtools.api.jvm.operations.JvmCompilationOperation;
 import org.junit.jupiter.api.*;
 
+import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * Tests the Java-friendly static accessor for obtaining JvmPlatformToolchain from KotlinToolchains.
+ * <p>
+ * This test verifies that the Kotlin extension property:
+ * <pre>
+ *     public inline val KotlinToolchains.jvm: JvmPlatformToolchain get() = getToolchain<JvmPlatformToolchain>()
+ * </pre>
+ * 
+ * Is accessible from Java via the static method JvmPlatformToolchain.from(KotlinToolchains).
+ */
 @ExperimentalBuildToolsApi
 public class JvmPlatformToolchainTest {
 
@@ -43,11 +56,32 @@ public class JvmPlatformToolchainTest {
         """);
 
         KotlinToolchains toolchains = framework.loadToolchain(false);
-        
-        JvmCompilationOperation op = framework.createJvmCompilationOperation(toolchains, List.of(source), outDir);
+
+        // ===== TEST THE .from() API =====
+        // Obtain the JvmPlatformToolchain using the Java-friendly static accessor.
+        // This tests the Kotlin extension property: KotlinToolchains.jvm
+        // which is exposed to Java as: JvmPlatformToolchain.from(KotlinToolchains)
+        JvmPlatformToolchain jvmToolchain;
+        try {
+            Method from = JvmPlatformToolchain.class.getMethod("from", KotlinToolchains.class);
+            Object res = from.invoke(null, toolchains);
+            assertNotNull(res, "JvmPlatformToolchain.from(toolchains) returned null");
+            assertInstanceOf(JvmPlatformToolchain.class, res);
+            jvmToolchain = (JvmPlatformToolchain) res;
+        } catch (NoSuchMethodException e) {
+            throw new AssertionError(
+                "JvmPlatformToolchain.from(KotlinToolchains) is not available; " +
+                "check kotlin-build-tools-api version (requires 2.3.0-Beta2+).", e
+            );
+        }
+
+        JvmCompilationOperation.Builder builder = jvmToolchain.jvmCompilationOperationBuilder(List.of(source), outDir);
+        JvmCompilerArguments.Builder args = builder.getCompilerArguments();
+        framework.configureBasicCompilerArguments(args, "test-module");
+        JvmCompilationOperation op = builder.build();
 
         CompilationResult result = CompilationTestUtils.runCompile(toolchains, op, new TestLogger(false));
 
-        assertEquals(CompilationResult.COMPILATION_SUCCESS, result, "Expected compilation through builder API to succeed");
+        assertEquals(CompilationResult.COMPILATION_SUCCESS, result, "Expected compilation through .from() API to succeed");
     }
 }
