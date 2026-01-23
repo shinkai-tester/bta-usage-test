@@ -1,11 +1,17 @@
-import org.jetbrains.kotlin.buildtools.api.*
-import org.jetbrains.kotlin.buildtools.api.jvm.JvmSnapshotBasedIncrementalCompilationOptions
+import org.jetbrains.kotlin.buildtools.api.CompilationResult
+import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
+import org.jetbrains.kotlin.buildtools.api.SourcesChanges
+import org.jetbrains.kotlin.buildtools.api.arguments.JvmCompilerArguments
+import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain
+import org.jetbrains.kotlin.buildtools.api.jvm.JvmSnapshotBasedIncrementalCompilationConfiguration
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
+import kotlin.io.path.writeText
 
 /**
  * Specialized test scenario for Java-Kotlin interop incremental compilation tests.
  * Handles the complexity of separate Java compilation followed by Kotlin compilation with Java on classpath.
+ * Uses the new builder pattern API to avoid deprecated interfaces.
  */
 @OptIn(ExperimentalBuildToolsApi::class)
 class JavaInteropTestScenario(private val framework: BtaTestFramework) {
@@ -47,26 +53,31 @@ class JavaInteropTestScenario(private val framework: BtaTestFramework) {
         // Compile Java first
         compileJava()
         
-        // Compile Kotlin with Java on classpath
-        val kotlinOp = CompilationTestUtils.newJvmOp(toolchain, listOf(kotlinSource!!), kotlinOut, framework)
-        addJavaToClasspath(kotlinOp)
+        // Compile Kotlin with Java on classpath using builder pattern
+        val jvmToolchain = toolchain.getToolchain(JvmPlatformToolchain::class.java)
+        val opBuilder = jvmToolchain.jvmCompilationOperationBuilder(listOf(kotlinSource!!), kotlinOut)
         
-        val icConfig = IncrementalCompilationUtils.icConfig(
-            kotlinIc, 
-            SourcesChanges.ToBeCalculated, 
+        // Configure compiler arguments using shared method
+        framework.configureBasicCompilerArguments(opBuilder.compilerArguments, "kotlin-interop-module")
+        addJavaToClasspath(opBuilder.compilerArguments)
+        
+        // Configure incremental compilation using shared utility
+        IncrementalCompilationUtils.configureIcOnBuilder(
+            opBuilder,
+            kotlinIc,
+            SourcesChanges.ToBeCalculated,
             kotlinIc.resolve("shrunk.bin")
-        ) {
-            it[JvmSnapshotBasedIncrementalCompilationOptions.PRECISE_JAVA_TRACKING] = preciseJavaTracking
-            it[JvmSnapshotBasedIncrementalCompilationOptions.KEEP_IC_CACHES_IN_MEMORY] = true
-            it[JvmSnapshotBasedIncrementalCompilationOptions.OUTPUT_DIRS] = setOf(kotlinOut, kotlinIc)
-            it[JvmSnapshotBasedIncrementalCompilationOptions.MODULE_BUILD_DIR] = kotlinWs
-            it[JvmSnapshotBasedIncrementalCompilationOptions.ROOT_PROJECT_DIR] = root
+        ) { icBuilder ->
+            icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.PRECISE_JAVA_TRACKING] = preciseJavaTracking
+            icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.KEEP_IC_CACHES_IN_MEMORY] = true
+            icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.OUTPUT_DIRS] = setOf(kotlinOut, kotlinIc)
+            icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.MODULE_BUILD_DIR] = kotlinWs
+            icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.ROOT_PROJECT_DIR] = root
         }
-        IncrementalCompilationUtils.attachIcTo(kotlinOp, icConfig)
         
         val result = CompilationTestUtils.runCompile(
             toolchain,
-            kotlinOp,
+            opBuilder.build(),
             framework.createDaemonExecutionPolicy(toolchain)
         )
         return JavaInteropCompilationResult(result, preciseJavaTracking)
@@ -80,29 +91,34 @@ class JavaInteropTestScenario(private val framework: BtaTestFramework) {
         requireNotNull(kotlinSource) { "Kotlin source must be set before compilation" }
         
         // Update and recompile Java
-        javaSource!!.toFile().writeText(newJavaContent.trimIndent())
+        javaSource!!.writeText(newJavaContent.trimIndent())
         compileJava()
         
-        // Recompile Kotlin with updated Java on classpath
-        val kotlinOp = CompilationTestUtils.newJvmOp(toolchain, listOf(kotlinSource!!), kotlinOut, framework)
-        addJavaToClasspath(kotlinOp)
+        // Recompile Kotlin with updated Java on classpath using builder pattern
+        val jvmToolchain = toolchain.getToolchain(JvmPlatformToolchain::class.java)
+        val opBuilder = jvmToolchain.jvmCompilationOperationBuilder(listOf(kotlinSource!!), kotlinOut)
         
-        val icConfig = IncrementalCompilationUtils.icConfig(
+        // Configure compiler arguments using shared method
+        framework.configureBasicCompilerArguments(opBuilder.compilerArguments, "kotlin-interop-module")
+        addJavaToClasspath(opBuilder.compilerArguments)
+        
+        // Configure incremental compilation - no Kotlin sources changed
+        IncrementalCompilationUtils.configureIcOnBuilder(
+            opBuilder,
             kotlinIc,
-            SourcesChanges.Known(emptyList(), emptyList()), // No Kotlin sources changed
+            SourcesChanges.Known(emptyList(), emptyList()),
             kotlinIc.resolve("shrunk.bin")
-        ) {
-            it[JvmSnapshotBasedIncrementalCompilationOptions.PRECISE_JAVA_TRACKING] = preciseJavaTracking
-            it[JvmSnapshotBasedIncrementalCompilationOptions.KEEP_IC_CACHES_IN_MEMORY] = true
-            it[JvmSnapshotBasedIncrementalCompilationOptions.OUTPUT_DIRS] = setOf(kotlinOut, kotlinIc)
-            it[JvmSnapshotBasedIncrementalCompilationOptions.MODULE_BUILD_DIR] = kotlinWs
-            it[JvmSnapshotBasedIncrementalCompilationOptions.ROOT_PROJECT_DIR] = root
+        ) { icBuilder ->
+            icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.PRECISE_JAVA_TRACKING] = preciseJavaTracking
+            icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.KEEP_IC_CACHES_IN_MEMORY] = true
+            icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.OUTPUT_DIRS] = setOf(kotlinOut, kotlinIc)
+            icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.MODULE_BUILD_DIR] = kotlinWs
+            icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.ROOT_PROJECT_DIR] = root
         }
-        IncrementalCompilationUtils.attachIcTo(kotlinOp, icConfig)
         
         val result = CompilationTestUtils.runCompile(
             toolchain,
-            kotlinOp,
+            opBuilder.build(),
             framework.createDaemonExecutionPolicy(toolchain)
         )
         return JavaInteropCompilationResult(result, preciseJavaTracking)
@@ -141,15 +157,14 @@ class JavaInteropTestScenario(private val framework: BtaTestFramework) {
     /**
      * Adds Java output directory to Kotlin compilation classpath.
      */
-    private fun addJavaToClasspath(kotlinOp: org.jetbrains.kotlin.buildtools.api.jvm.operations.JvmCompilationOperation) {
-        val args = kotlinOp.compilerArguments
-        val currentCp = args[org.jetbrains.kotlin.buildtools.api.arguments.JvmCompilerArguments.CLASSPATH]
+    private fun addJavaToClasspath(args: JvmCompilerArguments.Builder) {
+        val currentCp = args[JvmCompilerArguments.CLASSPATH]
         val newCp = if (currentCp.isNullOrEmpty()) {
             javaOut.toString()
         } else {
             currentCp + java.io.File.pathSeparator + javaOut.toString()
         }
-        args[org.jetbrains.kotlin.buildtools.api.arguments.JvmCompilerArguments.CLASSPATH] = newCp
+        args[JvmCompilerArguments.CLASSPATH] = newCp
     }
 }
 

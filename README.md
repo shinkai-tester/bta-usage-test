@@ -30,9 +30,9 @@ Run the example with:
 - **`IncrementalCompilationTestBuilder.kt`** - builder pattern implementation for complex multi-module incremental compilation test scenarios.
 
 #### Support classes
-- **`ClasspathUtils.kt`** - utilities for classpath management and URLClassLoader creation.
 - **`DaemonPolicy.kt`** - configuration and management of daemon execution policies.
 - **`JavaInteropTestScenario.kt`** - specialized test scenario builder for Java-Kotlin interoperability testing.
+- **`StdlibUtils.kt`** - utilities for locating Kotlin stdlib and reflect JAR files on the classpath.
 
 ### Test files (`src/test/`)
 
@@ -97,7 +97,16 @@ Run the example with:
 - ✅ **Incremental daemon cancellation** verifies cancellation of incremental compilation with daemon execution strategy
 - ✅ **Backward compatibility with old compiler** verifies that cancellation throws `IllegalStateException` with compiler version 2.3.0 (cancellation is supported from 2.3.20)
 
-##### 7. **`JvmPlatformToolchainTest.java`** - Java API Compatibility Test
+##### 7. **`LookupTrackerTest.kt`** - Lookup Tracker Tests
+**Purpose**: verifies that the lookup tracker correctly records symbol lookups during compilation.
+
+**What it tests**:
+- ✅ **Function call lookups with incremental + daemon** tests that function call lookups are recorded during incremental compilation with daemon execution
+- ✅ **Class reference lookups with incremental + in-process** verifies class reference lookups are recorded during incremental compilation with in-process execution
+- ✅ **Extension function lookups with non-incremental + daemon** tests extension function lookups during non-incremental compilation with daemon execution
+- ✅ **Property access lookups with non-incremental + in-process** verifies property access lookups during non-incremental compilation with in-process execution
+
+##### 8. **`JvmPlatformToolchainTest.java`** - Java API Compatibility Test
 **Purpose**: verifies that the Build Tools API can be used from Java code.
 
 **What it tests**:

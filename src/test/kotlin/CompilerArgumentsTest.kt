@@ -1,5 +1,5 @@
-import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
 import org.jetbrains.kotlin.buildtools.api.ExecutionPolicy
+import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
 import org.jetbrains.kotlin.buildtools.api.KotlinToolchains
 import org.jetbrains.kotlin.buildtools.api.arguments.CommonCompilerArguments
 import org.jetbrains.kotlin.buildtools.api.arguments.JvmCompilerArguments
@@ -7,7 +7,6 @@ import org.jetbrains.kotlin.buildtools.api.arguments.enums.JvmTarget
 import org.jetbrains.kotlin.buildtools.api.arguments.enums.KotlinVersion
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.DisplayName
-import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import kotlin.test.assertEquals
@@ -15,8 +14,8 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalBuildToolsApi::class)
-@Order(4)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@Suppress("DEPRECATION") // Tests intentionally use deprecated mutable compiler arguments API
 class CompilerArgumentsTest : TestBase() {
 
     private lateinit var toolchain: KotlinToolchains
@@ -234,7 +233,7 @@ class CompilerArgumentsTest : TestBase() {
     private fun getBooleanField(instance: Any, name: String): Boolean? =
         getProperty(instance, name) as? Boolean
 
-    @Suppress("UNCHECKED_CAST")
+    @Suppress("UNCHECKED_CAST", "SameParameterValue")
     private fun getArrayField(instance: Any, name: String): Array<String>? =
         getProperty(instance, name) as? Array<String>
 }

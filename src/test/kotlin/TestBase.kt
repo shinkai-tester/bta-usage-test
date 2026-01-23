@@ -1,7 +1,11 @@
 import org.jetbrains.kotlin.buildtools.api.CompilationResult
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
+import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
+import kotlin.io.path.extension
+import kotlin.io.path.isRegularFile
+import kotlin.io.path.name
 import kotlin.test.assertTrue
 
 /**
@@ -114,8 +118,8 @@ abstract class TestBase {
      * @return List of class file names
      */
     protected fun getGeneratedClassFiles(outputDirectory: Path): List<String> {
-        return outputDirectory.toFile().walkTopDown()
-            .filter { it.isFile && it.extension == "class" }
+        return Files.walk(outputDirectory)
+            .filter { it.isRegularFile() && it.extension == "class" }
             .map { it.name }
             .toList()
     }

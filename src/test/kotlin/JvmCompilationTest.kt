@@ -1,8 +1,7 @@
-import org.jetbrains.kotlin.buildtools.api.*
+import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
 import org.junit.jupiter.api.Disabled
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.DisplayName
-import org.junit.jupiter.api.Order
+import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -19,7 +18,6 @@ import kotlin.test.assertTrue
  * to reduce duplication and improve maintainability.
  */
 @OptIn(ExperimentalBuildToolsApi::class)
-@Order(1)
 class JvmCompilationTest : TestBase() {
 
     @Test

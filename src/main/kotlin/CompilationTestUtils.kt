@@ -1,7 +1,9 @@
 import org.jetbrains.kotlin.buildtools.api.*
-import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain
 import org.jetbrains.kotlin.buildtools.api.jvm.operations.JvmCompilationOperation
+import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.io.path.exists
+import kotlin.io.path.readBytes
 
 /**
  * Utilities for compilation testing, providing common helper methods for test scenarios.
@@ -26,13 +28,15 @@ object CompilationTestUtils {
      */
     @JvmStatic
     fun classOutputState(outDir: Path, relPath: String): OutputState {
-        val f = outDir.resolve(relPath).toFile()
-        return OutputState(f.exists(), if (f.exists()) f.lastModified() else null)
+        val p = outDir.resolve(relPath)
+        val exists = p.exists()
+        val lastModified = if (exists) Files.getLastModifiedTime(p).toMillis() else null
+        return OutputState(exists, lastModified)
     }
     
     /**
      * Creates a new JVM compilation operation with basic configuration.
-     * Uses the BtaTestFramework for minimal compilation setup.
+     * Uses the BtaTestFramework for minimal compilation setup with builder pattern.
      * 
      * @param toolchain The Kotlin toolchain to use for compilation
      * @param sources List of source files to compile
@@ -47,9 +51,7 @@ object CompilationTestUtils {
         outDir: Path,
         framework: BtaTestFramework
     ): JvmCompilationOperation {
-        val op = toolchain.getToolchain<JvmPlatformToolchain>().createJvmCompilationOperation(sources, outDir)
-        framework.configureMinimalCompilation(op)
-        return op
+        return framework.createJvmCompilationOperation(toolchain, sources, outDir)
     }
     
     /**
@@ -100,9 +102,7 @@ object CompilationTestUtils {
      */
     @JvmStatic
     fun readClassOutputBytes(outDir: Path, relPath: String): ByteArray? {
-        val f = outDir.resolve(relPath).toFile()
-        return if (f.exists()) f.readBytes() else null
+        val p = outDir.resolve(relPath)
+        return if (p.exists()) p.readBytes() else null
     }
-
-
 }

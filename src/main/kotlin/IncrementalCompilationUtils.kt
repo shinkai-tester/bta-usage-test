@@ -1,117 +1,97 @@
 import org.jetbrains.kotlin.buildtools.api.*
-import org.jetbrains.kotlin.buildtools.api.arguments.ExperimentalCompilerArgument
-import org.jetbrains.kotlin.buildtools.api.arguments.JvmCompilerArguments
+import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain
 import org.jetbrains.kotlin.buildtools.api.jvm.JvmSnapshotBasedIncrementalCompilationConfiguration
-import org.jetbrains.kotlin.buildtools.api.jvm.JvmSnapshotBasedIncrementalCompilationOptions
 import org.jetbrains.kotlin.buildtools.api.jvm.operations.JvmCompilationOperation
+import org.jetbrains.kotlin.buildtools.api.trackers.CompilerLookupTracker
 import java.nio.file.Path
 
 /**
  * Utilities for incremental compilation testing, providing helper methods for IC configuration.
+ * Uses the new builder pattern API to avoid deprecated interfaces.
  */
-@OptIn(ExperimentalBuildToolsApi::class, ExperimentalCompilerArgument::class)
+@OptIn(ExperimentalBuildToolsApi::class)
 object IncrementalCompilationUtils {
     
     /**
-     * Creates an incremental compilation configuration with the specified parameters.
+     * Configures incremental compilation on a JvmCompilationOperation.Builder with inline configuration.
      * 
+     * @param opBuilder The JVM compilation operation builder to configure
      * @param workingDir The working directory for incremental compilation
      * @param changes The source changes to apply
      * @param shrunkSnapshot Path to the shrunk classpath snapshot file
-     * @param dependencySnapshots List of dependency snapshot files for proper incremental compilation
-     * @param configure Optional lambda to configure additional IC options
-     * @return Configured JvmSnapshotBasedIncrementalCompilationConfiguration
+     * @param dependencySnapshots List of dependency snapshot files
+     * @param configure Lambda to configure IC options on the builder
      */
     @JvmStatic
-    fun icConfig(
+    fun configureIcOnBuilder(
+        opBuilder: JvmCompilationOperation.Builder,
         workingDir: Path,
         changes: SourcesChanges,
         shrunkSnapshot: Path,
         dependencySnapshots: List<Path> = emptyList(),
-        configure: (JvmSnapshotBasedIncrementalCompilationOptions) -> Unit = {}
-    ): JvmSnapshotBasedIncrementalCompilationConfiguration {
-        // Create IC options, set what we need, allow customization
-        object : JvmCompilationOperation {
-            override val compilerArguments: JvmCompilerArguments
-                get() = throw UnsupportedOperationException()
-            override fun createSnapshotBasedIcOptions(): JvmSnapshotBasedIncrementalCompilationOptions =
-            // KotlinToolchain requires a real op to create options; we fake by throwing here.
-                // We'll never call this path. The actual options are created on the real op below.
-                throw UnsupportedOperationException()
-            override fun <V> get(key: JvmCompilationOperation.Option<V>): V = throw UnsupportedOperationException()
-            override fun <V> set(key: JvmCompilationOperation.Option<V>, value: V) = throw UnsupportedOperationException()
-            override fun <V> get(key: BuildOperation.Option<V>): V = throw UnsupportedOperationException()
-            override fun <V> set(key: BuildOperation.Option<V>, value: V) = throw UnsupportedOperationException()
-        }
-        // We cannot create options without a real operation, so we do it later on the actual op.
-        // This helper just packages parameters. See usage below (we apply options from the real op).
-        return JvmSnapshotBasedIncrementalCompilationConfiguration(
+        configure: (JvmSnapshotBasedIncrementalCompilationConfiguration.Builder) -> Unit = {}
+    ) {
+        val icBuilder = opBuilder.snapshotBasedIcConfigurationBuilder(
             workingDir,
             changes,
-            dependenciesSnapshotFiles = dependencySnapshots,
-            shrunkClasspathSnapshot = shrunkSnapshot,
-            options = object : JvmSnapshotBasedIncrementalCompilationOptions {
-                private val map = mutableMapOf<JvmSnapshotBasedIncrementalCompilationOptions.Option<*>, Any?>()
-                @Suppress("UNCHECKED_CAST")
-                override fun <V> get(key: JvmSnapshotBasedIncrementalCompilationOptions.Option<V>): V = map[key] as V
-                override fun <V> set(key: JvmSnapshotBasedIncrementalCompilationOptions.Option<V>, value: V) { map[key] = value }
-            }
-        ).also { cfg ->
-            configure(cfg.options)
-        }
+            dependencySnapshots,
+            shrunkSnapshot
+        )
+        configure(icBuilder)
+        val icConfig = icBuilder.build()
+        opBuilder[JvmCompilationOperation.INCREMENTAL_COMPILATION] = icConfig
     }
-
+    
     /**
-     * Attaches incremental compilation configuration to a JVM compilation operation.
-     * This method properly transfers options from the configuration to the operation's real IC options.
+     * Creates a new JVM compilation operation with incremental compilation configured.
+     * Optionally attaches a lookup tracker.
      * 
-     * @param op The JVM compilation operation to configure
-     * @param cfg The incremental compilation configuration to attach
+     * @param toolchain The Kotlin toolchain to use for compilation
+     * @param sources List of source files to compile
+     * @param outDir Output directory for compiled classes
+     * @param icDir Directory for incremental compilation caches
+     * @param workspace The workspace/module directory
+     * @param framework The test framework instance for configuration
+     * @param lookupTracker Optional lookup tracker to attach to the operation
+     * @return Configured JvmCompilationOperation with incremental compilation
      */
     @JvmStatic
-    fun attachIcTo(op: JvmCompilationOperation, cfg: JvmSnapshotBasedIncrementalCompilationConfiguration) {
-        // Replace the placeholder options with real ones obtained from the op
-        val realOptions = op.createSnapshotBasedIcOptions()
-        // Copy values from cfg.options (which we filled already) to realOptions
-        val customOptionsAny = cfg.options as Any
-        val hasKeyFun: (JvmSnapshotBasedIncrementalCompilationOptions.Option<*>) -> Boolean = if (
-            customOptionsAny.javaClass.methods.any { it.name == "hasKey" }
-        ) {
-            val hasKeyMethod = customOptionsAny.javaClass.getMethod(
-                "hasKey",
-                JvmSnapshotBasedIncrementalCompilationOptions.Option::class.java
-            )
-            ({ opt: JvmSnapshotBasedIncrementalCompilationOptions.Option<*> ->
-                hasKeyMethod.invoke(customOptionsAny, opt) as Boolean
-            })
-        } else {
-            { _: JvmSnapshotBasedIncrementalCompilationOptions.Option<*> -> false }
+    fun newIncrementalJvmOp(
+        toolchain: KotlinToolchains,
+        sources: List<Path>,
+        outDir: Path,
+        icDir: Path,
+        workspace: Path,
+        framework: BtaTestFramework,
+        lookupTracker: CompilerLookupTracker? = null
+    ): JvmCompilationOperation {
+        val jvmToolchain = toolchain.getToolchain(JvmPlatformToolchain::class.java)
+        val opBuilder = jvmToolchain.jvmCompilationOperationBuilder(sources, outDir)
+
+        // Configure basic compiler arguments
+        framework.configureBasicCompilerArguments(opBuilder.compilerArguments, "test-module")
+
+        // Configure incremental compilation
+        configureIcOnBuilder(
+            opBuilder,
+            icDir,
+            SourcesChanges.ToBeCalculated,
+            icDir.resolve("shrunk.bin"),
+            emptyList()
+        ) { icBuilder ->
+            icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.ASSURED_NO_CLASSPATH_SNAPSHOT_CHANGES] = true
+            icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.KEEP_IC_CACHES_IN_MEMORY] = true
+            icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.OUTPUT_DIRS] = setOf(outDir, icDir)
+            icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.PRECISE_JAVA_TRACKING] = true
+            icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.MODULE_BUILD_DIR] = workspace
+            icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.ROOT_PROJECT_DIR] = workspace
         }
 
-        fun <T> copyIfPresent(key: JvmSnapshotBasedIncrementalCompilationOptions.Option<T>) {
-            if (hasKeyFun(key)) {
-                // Generics are respected because key carries T
-                realOptions[key] = cfg.options[key]
-            }
+        // Attach the lookup tracker if provided
+        if (lookupTracker != null) {
+            opBuilder[JvmCompilationOperation.LOOKUP_TRACKER] = lookupTracker
         }
 
-        copyIfPresent(JvmSnapshotBasedIncrementalCompilationOptions.ROOT_PROJECT_DIR)
-        copyIfPresent(JvmSnapshotBasedIncrementalCompilationOptions.MODULE_BUILD_DIR)
-        copyIfPresent(JvmSnapshotBasedIncrementalCompilationOptions.PRECISE_JAVA_TRACKING)
-        copyIfPresent(JvmSnapshotBasedIncrementalCompilationOptions.BACKUP_CLASSES)
-        copyIfPresent(JvmSnapshotBasedIncrementalCompilationOptions.KEEP_IC_CACHES_IN_MEMORY)
-        copyIfPresent(JvmSnapshotBasedIncrementalCompilationOptions.FORCE_RECOMPILATION)
-        copyIfPresent(JvmSnapshotBasedIncrementalCompilationOptions.OUTPUT_DIRS)
-        copyIfPresent(JvmSnapshotBasedIncrementalCompilationOptions.ASSURED_NO_CLASSPATH_SNAPSHOT_CHANGES)
-        copyIfPresent(JvmSnapshotBasedIncrementalCompilationOptions.USE_FIR_RUNNER)
-
-        val realCfg = JvmSnapshotBasedIncrementalCompilationConfiguration(
-            cfg.workingDirectory,
-            cfg.sourcesChanges,
-            cfg.dependenciesSnapshotFiles,
-            cfg.shrunkClasspathSnapshot,
-            realOptions
-        )
-        op[JvmCompilationOperation.INCREMENTAL_COMPILATION] = realCfg
+        return opBuilder.build()
     }
 }

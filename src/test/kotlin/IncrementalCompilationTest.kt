@@ -2,7 +2,6 @@ import org.jetbrains.kotlin.buildtools.api.CompilationResult
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
 import org.jetbrains.kotlin.buildtools.api.arguments.ExperimentalCompilerArgument
 import org.junit.jupiter.api.DisplayName
-import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -16,7 +15,6 @@ import kotlin.test.assertTrue
  * The scenarios are named and documented so readers can quickly see what behavior is verified.
  */
 @OptIn(ExperimentalBuildToolsApi::class, ExperimentalCompilerArgument::class)
-@Order(3)
 class IncrementalCompilationTest : TestBase() {
 
 

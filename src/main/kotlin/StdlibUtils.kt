@@ -1,4 +1,6 @@
-import java.io.File
+import java.nio.file.Path
+import kotlin.io.path.exists
+import kotlin.io.path.name
 
 /**
  * Utility object for common stdlib and reflect JAR resolution logic.
@@ -25,21 +27,21 @@ object StdlibUtils {
             val jarPart = spec.substringAfter("jar:").substringBefore("!")
             val path = jarPart.removePrefix("file:")
             val normalized = normalizeFilePath(path)
-            if (File(normalized).exists()) return normalized
+            if (Path.of(normalized).exists()) return normalized
         } else if (spec.startsWith("file:")) {
             // Class loaded from an exploded directory. Find stdlib jar on classpath.
-            val cpEntries = System.getProperty("java.class.path").orEmpty().split(File.pathSeparator)
+            val cpEntries = System.getProperty("java.class.path").orEmpty().split(java.io.File.pathSeparator)
             val candidate = cpEntries.firstNotNullOfOrNull { entry ->
-                if (entry.contains("kotlin-stdlib") && entry.endsWith(".jar") && File(entry).exists()) entry else null
+                if (entry.contains("kotlin-stdlib") && entry.endsWith(".jar") && Path.of(entry).exists()) entry else null
             }
             if (candidate != null) return candidate
         }
 
         // Fallback: scan classpath thoroughly for kotlin-stdlib jar
-        val cpEntries = System.getProperty("java.class.path").orEmpty().split(File.pathSeparator)
-        val regex = Regex("""kotlin-stdlib(-jdk[0-9]+)?(-\d[\w\.+-]*)?\.jar$""")
+        val cpEntries = System.getProperty("java.class.path").orEmpty().split(java.io.File.pathSeparator)
+        val regex = Regex("""kotlin-stdlib(-jdk[0-9]+)?(-\d[\w.+-]*)?\.jar$""")
         val match = cpEntries.firstNotNullOfOrNull { entry ->
-            if (entry.isNotBlank() && regex.containsMatchIn(File(entry).name) && File(entry).exists()) entry else null
+            if (entry.isNotBlank() && regex.containsMatchIn(Path.of(entry).name) && Path.of(entry).exists()) entry else null
         }
         if (match != null) return match
 
@@ -55,10 +57,10 @@ object StdlibUtils {
     private fun normalizeFilePath(path: String): String {
         var p = path
         // Remove leading slash from Windows drive paths BEFORE converting slashes
-        if (File.separatorChar == '\\' && p.matches(Regex("^/[A-Za-z]:.*"))) {
+        if (java.io.File.separatorChar == '\\' && p.matches(Regex("^/[A-Za-z]:.*"))) {
             p = p.removePrefix("/")
         }
         // Convert forward slashes to platform-specific separators
-        return p.replace('/', File.separatorChar)
+        return p.replace('/', java.io.File.separatorChar)
     }
 }

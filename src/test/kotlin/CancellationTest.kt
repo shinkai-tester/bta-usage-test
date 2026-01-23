@@ -1,11 +1,11 @@
 import org.jetbrains.kotlin.buildtools.api.*
-import org.jetbrains.kotlin.buildtools.api.jvm.JvmSnapshotBasedIncrementalCompilationOptions
+import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain
+import org.jetbrains.kotlin.buildtools.api.jvm.JvmSnapshotBasedIncrementalCompilationConfiguration
+import org.jetbrains.kotlin.buildtools.api.jvm.operations.JvmCompilationOperation
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.DisplayName
-import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import java.io.File
 import java.net.URLClassLoader
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
@@ -22,7 +22,6 @@ import kotlin.io.path.*
  * - Incremental compilation with daemon execution strategy
  */
 @OptIn(ExperimentalBuildToolsApi::class)
-@Order(6)
 class CancellationTest : TestBase() {
 
     @Test
@@ -82,7 +81,7 @@ class CancellationTest : TestBase() {
         }
 
         operation.cancel()
-        daemonRunPath.resolve("daemon-test-start").createFile().toFile().deleteOnExit()
+        daemonRunPath.resolve("daemon-test-start").createFile().also { it.toFile().deleteOnExit() }
         
         executionThread.join()
 
@@ -105,19 +104,26 @@ class CancellationTest : TestBase() {
         """)
 
         val toolchain = framework.loadToolchain()
-        val operation = CompilationTestUtils.newJvmOp(toolchain, listOf(source), setup.outputDirectory, framework)
         
-        // Configure incremental compilation
-        val icConfig = IncrementalCompilationUtils.icConfig(
+        // Create operation with IC using builder pattern
+        val jvmToolchain = toolchain.getToolchain(JvmPlatformToolchain::class.java)
+        val opBuilder = jvmToolchain.jvmCompilationOperationBuilder(listOf(source), setup.outputDirectory)
+        
+        // Configure basic compiler arguments using shared method
+        framework.configureBasicCompilerArguments(opBuilder.compilerArguments, "cancellation-test-module")
+        
+        // Configure incremental compilation using the new builder pattern
+        val icBuilder = opBuilder.snapshotBasedIcConfigurationBuilder(
             icDir,
             SourcesChanges.Unknown,
-            icDir.resolve("shrunk-classpath-snapshot.bin"),
-            emptyList()
-        ) { options ->
-            options[JvmSnapshotBasedIncrementalCompilationOptions.KEEP_IC_CACHES_IN_MEMORY] = true
-            options[JvmSnapshotBasedIncrementalCompilationOptions.OUTPUT_DIRS] = setOf(setup.outputDirectory, icDir)
-        }
-        IncrementalCompilationUtils.attachIcTo(operation, icConfig)
+            emptyList(),
+            icDir.resolve("shrunk-classpath-snapshot.bin")
+        )
+        icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.KEEP_IC_CACHES_IN_MEMORY] = true
+        icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.OUTPUT_DIRS] = setOf(setup.outputDirectory, icDir)
+        
+        opBuilder[JvmCompilationOperation.INCREMENTAL_COMPILATION] = icBuilder.build()
+        val operation = opBuilder.build()
 
         val exception = assertThrows<OperationCancelledException> {
             toolchain.createBuildSession().use { session ->
@@ -143,18 +149,26 @@ class CancellationTest : TestBase() {
         val daemonRunPath: Path = createTempDirectory("test-daemon-files-incremental")
 
         val toolchain = framework.loadToolchain(useDaemon = true)
-        val operation = CompilationTestUtils.newJvmOp(toolchain, listOf(source), setup.outputDirectory, framework)
-
-        val icConfig = IncrementalCompilationUtils.icConfig(
+        
+        // Create operation with IC using builder pattern
+        val jvmToolchain = toolchain.getToolchain(JvmPlatformToolchain::class.java)
+        val opBuilder = jvmToolchain.jvmCompilationOperationBuilder(listOf(source), setup.outputDirectory)
+        
+        // Configure basic compiler arguments using shared method
+        framework.configureBasicCompilerArguments(opBuilder.compilerArguments, "cancellation-test-module")
+        
+        // Configure incremental compilation using the new builder pattern
+        val icBuilder = opBuilder.snapshotBasedIcConfigurationBuilder(
             icDir,
             SourcesChanges.Unknown,
-            icDir.resolve("shrunk-classpath-snapshot.bin"),
-            emptyList()
-        ) { options ->
-            options[JvmSnapshotBasedIncrementalCompilationOptions.KEEP_IC_CACHES_IN_MEMORY] = true
-            options[JvmSnapshotBasedIncrementalCompilationOptions.OUTPUT_DIRS] = setOf(setup.outputDirectory, icDir)
-        }
-        IncrementalCompilationUtils.attachIcTo(operation, icConfig)
+            emptyList(),
+            icDir.resolve("shrunk-classpath-snapshot.bin")
+        )
+        icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.KEEP_IC_CACHES_IN_MEMORY] = true
+        icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.OUTPUT_DIRS] = setOf(setup.outputDirectory, icDir)
+        
+        opBuilder[JvmCompilationOperation.INCREMENTAL_COMPILATION] = icBuilder.build()
+        val operation = opBuilder.build()
         
         val daemonPolicy = createDaemonPolicyWithWait(toolchain, daemonRunPath)
 
@@ -175,7 +189,7 @@ class CancellationTest : TestBase() {
         }
 
         operation.cancel()
-        daemonRunPath.resolve("daemon-test-start").createFile().toFile().deleteOnExit()
+        daemonRunPath.resolve("daemon-test-start").createFile().also { it.toFile().deleteOnExit() }
         
         executionThread.join()
 
@@ -193,7 +207,7 @@ class CancellationTest : TestBase() {
     @OptIn(DelicateBuildToolsApi::class)
     private fun createDaemonPolicyWithWait(toolchain: KotlinToolchains, daemonRunPath: Path): ExecutionPolicy {
         return framework.withDaemonContext {
-            val daemonPolicy = toolchain.createDaemonExecutionPolicy()
+            val daemonPolicy = toolchain.daemonExecutionPolicyBuilder().build()
             // Configure daemon with wait flag and custom run directory using reflection
             configureDaemonPolicyWithWait(daemonPolicy, daemonRunPath)
             daemonPolicy
@@ -294,9 +308,9 @@ class CancellationTest : TestBase() {
         val oldClasspath = System.getProperty("old.compiler.impl.classpath")
             ?: throw IllegalStateException("old.compiler.impl.classpath system property not set")
         
-        val urls = oldClasspath.split(File.pathSeparator)
+        val urls = oldClasspath.split(java.io.File.pathSeparator)
             .filter { it.isNotBlank() }
-            .map { File(it).toURI().toURL() }
+            .map { Path.of(it).toUri().toURL() }
             .toTypedArray()
         
         val parent = tryLoadSharedApiParent()

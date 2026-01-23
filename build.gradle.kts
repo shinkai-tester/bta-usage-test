@@ -4,7 +4,7 @@ import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import java.io.File
 
 plugins {
-    kotlin("jvm") version "2.3.20-Beta1"
+    kotlin("jvm") version "2.4.0-dev-539"
     kotlin("plugin.power-assert") version "2.3.20-Beta1"
 }
 
@@ -14,11 +14,11 @@ configurations {
 }
 
 dependencies {
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.20-Beta1")
-    implementation("org.jetbrains.kotlin:kotlin-build-tools-api:2.3.20-Beta1")
-    runtimeOnly("org.jetbrains.kotlin:kotlin-reflect:2.3.20-Beta1")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.4.0-dev-539")
+    implementation("org.jetbrains.kotlin:kotlin-build-tools-api:2.4.0-dev-539")
+    runtimeOnly("org.jetbrains.kotlin:kotlin-reflect:2.4.0-dev-539")
     // Keep compiler impl off the app classpath; they will be passed explicitly at runtime
-    "myCompiler"("org.jetbrains.kotlin:kotlin-build-tools-impl:2.3.20-Beta1")
+    "myCompiler"("org.jetbrains.kotlin:kotlin-build-tools-impl:2.4.0-dev-539")
     // Old compiler for backward compatibility testing (cancellation not supported before 2.3.20)
     "oldCompiler"("org.jetbrains.kotlin:kotlin-build-tools-impl:2.3.0")
 

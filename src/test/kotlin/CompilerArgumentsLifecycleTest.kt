@@ -7,8 +7,8 @@ import org.junit.jupiter.api.*
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalBuildToolsApi::class)
-@Order(5)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@Suppress("DEPRECATION") // Tests intentionally use deprecated mutable compiler arguments API
 class CompilerArgumentsLifecycleTest : TestBase() {
 
     private lateinit var toolchain: KotlinToolchains

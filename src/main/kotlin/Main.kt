@@ -6,7 +6,10 @@ import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain
 import org.jetbrains.kotlin.buildtools.api.jvm.operations.JvmCompilationOperation
 import org.jetbrains.kotlin.buildtools.api.trackers.BuildMetricsCollector
 import org.jetbrains.kotlin.buildtools.api.trackers.CompilerLookupTracker
+import java.nio.file.Files
 import kotlin.io.path.createDirectories
+import kotlin.io.path.isRegularFile
+import kotlin.io.path.relativeTo
 
 @OptIn(ExperimentalBuildToolsApi::class, ExperimentalCompilerArgument::class)
 fun main(vararg implClasspath: String) {
@@ -35,31 +38,43 @@ fun main(vararg implClasspath: String) {
     val useDaemon = false // set to true if you want to test daemon; logs differ slightly
     val toolchain = framework.loadToolchain(useDaemon)
 
-    // --- 3) Create operation and configure using infrastructure ---
-    val op = toolchain.getToolchain<JvmPlatformToolchain>().createJvmCompilationOperation(listOf(src), outDir)
-    framework.configureMinimalCompilation(op)
+    // --- 3) Create operation using builder pattern ---
+    val jvmToolchain = toolchain.getToolchain(JvmPlatformToolchain::class.java)
+    val opBuilder = jvmToolchain.jvmCompilationOperationBuilder(listOf(src), outDir)
     
-    // Override specific settings for this example
-    val args = op.compilerArguments
+    // Configure compiler arguments via builder
+    val args = opBuilder.compilerArguments
+    args[JvmCompilerArguments.NO_STDLIB] = true
+    args[JvmCompilerArguments.NO_REFLECT] = true
+    args[JvmCompilerArguments.CLASSPATH] = StdlibUtils.findStdlibJar()
     args[JvmCompilerArguments.JVM_TARGET] = JvmTarget.JVM_11
     args[JvmCompilerArguments.MODULE_NAME] = "bta.main.example"
 
     // Optional trackers/metrics printed to stdout (kept simple for visibility)
-    op[BuildOperation.METRICS_COLLECTOR] = object : BuildMetricsCollector {
+    opBuilder[BuildOperation.METRICS_COLLECTOR] = object : BuildMetricsCollector {
         override fun collectMetric(name: String, type: BuildMetricsCollector.ValueType, value: Long) {
             println("Metric: $name ${type.name}=$value")
         }
     }
-    op[JvmCompilationOperation.LOOKUP_TRACKER] = object : CompilerLookupTracker {
+    opBuilder[JvmCompilationOperation.LOOKUP_TRACKER] = object : CompilerLookupTracker {
         override fun recordLookup(filePath: String, scopeFqName: String, scopeKind: CompilerLookupTracker.ScopeKind, name: String) {
             println("Lookup: $filePath $scopeFqName ${scopeKind.name} $name")
         }
         override fun clear() { println("Lookup: clear()") }
     }
+    
+    // Build the immutable operation
+    val op = opBuilder.build()
 
-    // --- 4) Choose execution policy ---
-    val policy: ExecutionPolicy = if (useDaemon) toolchain.createDaemonExecutionPolicy() else toolchain.createInProcessExecutionPolicy()
-    if (useDaemon) policy.configureDaemon(listOf("Xmx3g", "Xms1g"), 2000)
+    // --- 4) Choose execution policy using builder pattern ---
+    val policy: ExecutionPolicy = if (useDaemon) {
+        val daemonBuilder = toolchain.daemonExecutionPolicyBuilder()
+        daemonBuilder[ExecutionPolicy.WithDaemon.JVM_ARGUMENTS] = listOf("-Xmx3g", "-Xms1g")
+        daemonBuilder[ExecutionPolicy.WithDaemon.SHUTDOWN_DELAY_MILLIS] = 2000L
+        daemonBuilder.build()
+    } else {
+        toolchain.createInProcessExecutionPolicy()
+    }
 
     // --- 5) Logger with debug enabled to print the desired "d:" lines ---
     val logger = object : KotlinLogger {
@@ -82,9 +97,9 @@ fun main(vararg implClasspath: String) {
     // --- 7) Print summary and a quick check that output was produced ---
     println("Compilation result: $result")
     println("Compiler version: ${toolchain.getCompilerVersion()}")
-    println("Classpath used:\n${args[JvmCompilerArguments.CLASSPATH] ?: "Not set"}")
+    println("Classpath used:\n${op.compilerArguments[JvmCompilerArguments.CLASSPATH] ?: "Not set"}")
 
-    val produced = outDir.toFile().walkTopDown().filter { it.isFile }.map { it.relativeTo(outDir.toFile()).path }.toList()
+    val produced = Files.walk(outDir).filter { it.isRegularFile() }.map { it.relativeTo(outDir).toString() }.toList()
     println("Produced files (relative to out):\n" + produced.joinToString(System.lineSeparator()))
 }
 

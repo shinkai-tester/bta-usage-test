@@ -1,6 +1,7 @@
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
 import org.jetbrains.kotlin.buildtools.api.KotlinToolchains
 import org.jetbrains.kotlin.buildtools.api.ExecutionPolicy
+import org.jetbrains.kotlin.buildtools.api.arguments.JvmCompilerArguments
 import org.jetbrains.kotlin.buildtools.api.jvm.operations.JvmCompilationOperation
 import java.nio.file.Path
 
@@ -92,12 +93,46 @@ class BtaTestFramework {
     }
 
     /**
+     * Creates a new JVM compilation operation with minimal compilation settings.
+     * Uses the builder pattern to avoid deprecated APIs.
+     * 
+     * @param toolchain The Kotlin toolchain to use
+     * @param sources List of source files to compile
+     * @param outDir Output directory for compiled classes
+     * @return Configured JvmCompilationOperation
+     */
+    fun createJvmCompilationOperation(
+        toolchain: KotlinToolchains,
+        sources: List<Path>,
+        outDir: Path
+    ): JvmCompilationOperation {
+        val workspace = workspaceManager.getLastWorkspace()
+        return toolchainManager.createJvmCompilationOperation(toolchain, sources, outDir, workspace)
+    }
+    
+    /**
+     * @deprecated Use createJvmCompilationOperation instead which uses the builder pattern.
      * Configures minimal compilation settings for a JVM compilation operation.
      * 
      * @param operation The JVM compilation operation to configure
      */
+    @Deprecated("Use createJvmCompilationOperation instead", ReplaceWith("createJvmCompilationOperation(toolchain, sources, outDir)"))
     fun configureMinimalCompilation(operation: JvmCompilationOperation) {
         val workspace = workspaceManager.getLastWorkspace()
+        @Suppress("DEPRECATION")
         toolchainManager.configureMinimalCompilation(operation, workspace)
+    }
+    
+    /**
+     * Configures basic compiler arguments that are common across all compilation scenarios.
+     * Sets NO_STDLIB, NO_REFLECT, CLASSPATH (with stdlib), and MODULE_NAME.
+     * 
+     * This is a convenience method that delegates to ToolchainManager.configureBasicCompilerArguments.
+     * 
+     * @param args The compiler arguments builder to configure
+     * @param moduleName The module name to set for the compilation
+     */
+    fun configureBasicCompilerArguments(args: JvmCompilerArguments.Builder, moduleName: String) {
+        toolchainManager.configureBasicCompilerArguments(args, moduleName)
     }
 }
