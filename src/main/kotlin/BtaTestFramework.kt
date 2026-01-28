@@ -110,18 +110,6 @@ class BtaTestFramework {
         return toolchainManager.createJvmCompilationOperation(toolchain, sources, outDir, workspace)
     }
     
-    /**
-     * @deprecated Use createJvmCompilationOperation instead which uses the builder pattern.
-     * Configures minimal compilation settings for a JVM compilation operation.
-     * 
-     * @param operation The JVM compilation operation to configure
-     */
-    @Deprecated("Use createJvmCompilationOperation instead", ReplaceWith("createJvmCompilationOperation(toolchain, sources, outDir)"))
-    fun configureMinimalCompilation(operation: JvmCompilationOperation) {
-        val workspace = workspaceManager.getLastWorkspace()
-        @Suppress("DEPRECATION")
-        toolchainManager.configureMinimalCompilation(operation, workspace)
-    }
     
     /**
      * Configures basic compiler arguments that are common across all compilation scenarios.

@@ -123,38 +123,6 @@ class ToolchainManager {
         return builder.build()
     }
     
-    /**
-     * @deprecated Use createJvmCompilationOperation instead which uses the builder pattern.
-     * This method is kept for backward compatibility but uses deprecated APIs.
-     */
-    @Deprecated("Use createJvmCompilationOperation instead", ReplaceWith("createJvmCompilationOperation(toolchain, sources, outDir, workspace)"))
-    fun configureMinimalCompilation(operation: JvmCompilationOperation, workspace: Path? = null) {
-        @Suppress("DEPRECATION")
-        val args = operation.compilerArguments
-        @Suppress("DEPRECATION")
-        args[JvmCompilerArguments.NO_STDLIB] = true
-        @Suppress("DEPRECATION")
-        args[JvmCompilerArguments.NO_REFLECT] = true
-
-        val stdlib = findStdlibJar()
-        val classpath = listOfNotNull(stdlib)
-            .filter { it.isNotBlank() && Path.of(it).exists() }
-            .joinToString(java.io.File.pathSeparator)
-        @Suppress("DEPRECATION")
-        args[JvmCompilerArguments.CLASSPATH] = classpath
-        
-        // Set module name for incremental compilation support
-        @Suppress("DEPRECATION")
-        args[JvmCompilerArguments.MODULE_NAME] = "test-module"
-
-        // Provide JDK home and module path to enable Java source compilation alongside Kotlin
-        @Suppress("DEPRECATION")
-        configureJdkSettingsDeprecated(args)
-        
-        // Configure Java source roots if workspace is provided
-        @Suppress("DEPRECATION")
-        workspace?.let { configureJavaSourceRootsDeprecated(args, it) }
-    }
     
     /**
      * Locates the kotlin-stdlib JAR file on the classpath.
@@ -198,10 +166,10 @@ class ToolchainManager {
     private fun tryLoadSharedApiParent(): ClassLoader {
         // Try to instantiate SharedApiClassesClassLoader reflectively (available since 2.3.0)
         return try {
-            val clazz = Class.forName("org.jetbrains.kotlin.buildtools.api.classloaders.SharedApiClassesClassLoader")
-            val ctor = clazz.getDeclaredConstructor()
-            ctor.isAccessible = true
-            val instance = ctor.newInstance()
+            val sharedApiCl = Class.forName("org.jetbrains.kotlin.buildtools.api.SharedApiClassesClassLoader")
+            // Call the factory method to get an instance
+            val factoryMethod = sharedApiCl.getMethod("newInstance")
+            val instance = factoryMethod.invoke(null)
             instance as ClassLoader
         } catch (_: Throwable) {
             // Fallback: system classloader
@@ -211,16 +179,13 @@ class ToolchainManager {
     
     private fun getImplClasspathUrls(): Array<URL> {
         val prop = System.getProperty("compiler.impl.classpath")?.takeIf { it.isNotBlank() }
-        val candidates: List<String> = if (prop != null) {
-            prop.split(java.io.File.pathSeparator)
-        } else {
-            // Fallback: scan current process classpath for impl/compat jars
+        val candidates: List<String> = prop?.split(java.io.File.pathSeparator)
+            ?: // Fallback: scan current process classpath for impl/compat jars
             System.getProperty("java.class.path").orEmpty().split(java.io.File.pathSeparator)
                 .filter { path ->
                     val name = Path.of(path).name
                     name.contains("kotlin-build-tools-impl") || name.contains("kotlin-build-tools-compat")
                 }
-        }
         val urls = candidates
             .filter { it.isNotBlank() }
             .mapNotNull { runCatching { Path.of(it).toUri().toURL() }.getOrNull() }
@@ -254,28 +219,7 @@ class ToolchainManager {
             }
         }
     }
-    
-    /**
-     * @deprecated Use configureJdkSettings with Builder instead
-     */
-    @Suppress("DEPRECATION")
-    private fun configureJdkSettingsDeprecated(args: JvmCompilerArguments) {
-        val javaHomeProp = System.getProperty("java.home")
-        if (javaHomeProp != null) {
-            val javaHome = Path.of(javaHomeProp)
-            val isJre = javaHome.fileName?.toString()?.equals("jre", ignoreCase = true) == true
-            val jdkHome = if (isJre) (javaHome.parent ?: javaHome) else javaHome
-            if (jdkHome.isDirectory()) {
-                args[JvmCompilerArguments.JDK_HOME] = jdkHome.toString()
-                val jmods = jdkHome.resolve("jmods")
-                if (jmods.isDirectory()) {
-                    args[JvmCompilerArguments.X_MODULE_PATH] = jmods.absolutePathString()
-                    args[JvmCompilerArguments.X_ADD_MODULES] = arrayOf("ALL-MODULE-PATH")
-                }
-            }
-        }
-    }
-    
+
     /**
      * Configures Java source roots and compiles Java files if present.
      * 
@@ -287,25 +231,6 @@ class ToolchainManager {
 
         // Proactively compile any Java sources in the workspace into the conventional out directory
         // used by tests (workspace/out), to ensure Java classes are present alongside Kotlin output.
-        try {
-            val javaFiles = Files.walk(workspace)
-                .filter { it.isRegularFile() && it.extension.equals("java", ignoreCase = true) }
-                .toList()
-            if (javaFiles.isNotEmpty()) {
-                compileJavaFiles(javaFiles, workspace)
-            }
-        } catch (_: Throwable) {
-            // If Java compiler is unavailable or fails, ignore; Kotlin compilation may still succeed
-        }
-    }
-    
-    /**
-     * @deprecated Use configureJavaSourceRoots with Builder instead
-     */
-    @Suppress("DEPRECATION")
-    private fun configureJavaSourceRootsDeprecated(args: JvmCompilerArguments, workspace: Path) {
-        args[JvmCompilerArguments.X_JAVA_SOURCE_ROOTS] = arrayOf(workspace.toString())
-
         try {
             val javaFiles = Files.walk(workspace)
                 .filter { it.isRegularFile() && it.extension.equals("java", ignoreCase = true) }

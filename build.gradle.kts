@@ -14,7 +14,6 @@ configurations {
 }
 
 dependencies {
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.4.0-dev-539")
     implementation("org.jetbrains.kotlin:kotlin-build-tools-api:2.4.0-dev-539")
     runtimeOnly("org.jetbrains.kotlin:kotlin-reflect:2.4.0-dev-539")
     // Keep compiler impl off the app classpath; they will be passed explicitly at runtime
@@ -51,5 +50,5 @@ tasks.register<JavaExec>("run") {
 }
 
 powerAssert {
-    functions = listOf("kotlin.assert", "kotlin.test.assertTrue", "kotlin.test.assertEquals", "kotlin.test.assertNull")
+    functions.set(listOf("kotlin.assert", "kotlin.test.assertTrue", "kotlin.test.assertEquals", "kotlin.test.assertNull"))
 }
