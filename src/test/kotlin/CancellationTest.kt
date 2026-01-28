@@ -323,10 +323,9 @@ class CancellationTest : TestBase() {
      */
     private fun tryLoadSharedApiParent(): ClassLoader {
         return try {
-            val clazz = Class.forName("org.jetbrains.kotlin.buildtools.api.classloaders.SharedApiClassesClassLoader")
-            val ctor = clazz.getDeclaredConstructor()
-            ctor.isAccessible = true
-            ctor.newInstance() as ClassLoader
+            val sharedApiCl = Class.forName("org.jetbrains.kotlin.buildtools.api.SharedApiClassesClassLoader")
+            val factoryMethod = sharedApiCl.getMethod("newInstance")
+            factoryMethod.invoke(null) as ClassLoader
         } catch (_: Throwable) {
             ClassLoader.getSystemClassLoader()
         }
