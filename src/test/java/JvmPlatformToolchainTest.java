@@ -57,10 +57,6 @@ public class JvmPlatformToolchainTest {
 
         KotlinToolchains toolchains = framework.loadToolchain();
 
-        // ===== TEST THE .from() API =====
-        // Obtain the JvmPlatformToolchain using the Java-friendly static accessor.
-        // This tests the Kotlin extension property: KotlinToolchains.jvm
-        // which is exposed to Java as: JvmPlatformToolchain.from(KotlinToolchains)
         JvmPlatformToolchain jvmToolchain;
         try {
             Method from = JvmPlatformToolchain.class.getMethod("from", KotlinToolchains.class);
