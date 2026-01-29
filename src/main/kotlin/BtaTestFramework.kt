@@ -73,6 +73,18 @@ class BtaTestFramework {
     }
 
     /**
+     * Loads the Kotlin toolchain using a custom classpath.
+     * This is useful for testing with different compiler versions.
+     * 
+     * @param classpath The classpath string (paths separated by system path separator)
+     * @param useDaemon If true, sets the classloader as TCCL during initialization
+     * @return Configured KotlinToolchains instance
+     */
+    fun loadToolchainWithClasspath(classpath: String, useDaemon: Boolean = false): KotlinToolchains {
+        return toolchainManager.loadToolchainWithClasspath(classpath, useDaemon)
+    }
+
+    /**
      * Creates a DaemonExecutionPolicy in a daemon-friendly context.
      * 
      * @param toolchain The Kotlin toolchain to create the daemon execution policy for

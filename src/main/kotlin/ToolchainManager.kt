@@ -1,6 +1,7 @@
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
 import org.jetbrains.kotlin.buildtools.api.KotlinToolchains
 import org.jetbrains.kotlin.buildtools.api.ExecutionPolicy
+import org.jetbrains.kotlin.buildtools.api.SharedApiClassesClassLoader
 import org.jetbrains.kotlin.buildtools.api.arguments.ExperimentalCompilerArgument
 import org.jetbrains.kotlin.buildtools.api.arguments.JvmCompilerArguments
 import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain
@@ -37,6 +38,28 @@ class ToolchainManager {
     fun loadToolchain(useDaemon: Boolean = false): KotlinToolchains {
         // Always load implementation in an isolated classloader with SharedApiClassesClassLoader as parent
         val implCl = buildIsolatedImplClassLoader()
+        return loadToolchainWithClassLoader(implCl, useDaemon)
+    }
+    
+    /**
+     * Loads the Kotlin toolchain using a custom classpath.
+     * This is useful for testing with different compiler versions.
+     * 
+     * @param classpath The classpath string (paths separated by system path separator)
+     * @param useDaemon If true, sets the classloader as TCCL during initialization
+     * @return Configured KotlinToolchains instance
+     */
+    fun loadToolchainWithClasspath(classpath: String, useDaemon: Boolean = false): KotlinToolchains {
+        val urls = classpath.split(java.io.File.pathSeparator)
+            .filter { it.isNotBlank() }
+            .map { Path.of(it).toUri().toURL() }
+            .toTypedArray()
+        val parent = SharedApiClassesClassLoader()
+        val implCl = URLClassLoader(urls, parent)
+        return loadToolchainWithClassLoader(implCl, useDaemon)
+    }
+    
+    private fun loadToolchainWithClassLoader(implCl: URLClassLoader, useDaemon: Boolean): KotlinToolchains {
         return if (useDaemon) {
             val prev = Thread.currentThread().contextClassLoader
             try {
@@ -159,22 +182,8 @@ class ToolchainManager {
     // --- Implementation classloader isolation helpers ---
     private fun buildIsolatedImplClassLoader(): URLClassLoader {
         val urls = getImplClasspathUrls()
-        val parent = tryLoadSharedApiParent()
+        val parent = SharedApiClassesClassLoader()
         return URLClassLoader(urls, parent)
-    }
-    
-    private fun tryLoadSharedApiParent(): ClassLoader {
-        // Try to instantiate SharedApiClassesClassLoader reflectively (available since 2.3.0)
-        return try {
-            val sharedApiCl = Class.forName("org.jetbrains.kotlin.buildtools.api.SharedApiClassesClassLoader")
-            // Call the factory method to get an instance
-            val factoryMethod = sharedApiCl.getMethod("newInstance")
-            val instance = factoryMethod.invoke(null)
-            instance as ClassLoader
-        } catch (_: Throwable) {
-            // Fallback: system classloader
-            ClassLoader.getSystemClassLoader()
-        }
     }
     
     private fun getImplClasspathUrls(): Array<URL> {

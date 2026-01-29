@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import java.net.URLClassLoader
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import kotlin.concurrent.thread
@@ -285,8 +284,9 @@ class CancellationTest : TestBase() {
             }
         """)
 
-        // Load toolchain with old compiler (2.3.0) that doesn't support cancellation
-        val toolchain = loadToolchainWithOldCompiler()
+        val oldClasspath = System.getProperty("old.compiler.impl.classpath")
+            ?: throw IllegalStateException("old.compiler.impl.classpath system property not set")
+        val toolchain = framework.loadToolchainWithClasspath(oldClasspath)
         val operation = CompilationTestUtils.newJvmOp(toolchain, listOf(source), setup.outputDirectory, framework)
 
         val exception = assertThrows<IllegalStateException> {
@@ -298,36 +298,5 @@ class CancellationTest : TestBase() {
             true,
             "Expected error message about cancellation not supported, but got: ${exception.message}"
         )
-    }
-    
-    /**
-     * Loads the Kotlin toolchain using the old compiler implementation (2.3.0).
-     * This is used for backward compatibility testing.
-     */
-    private fun loadToolchainWithOldCompiler(): KotlinToolchains {
-        val oldClasspath = System.getProperty("old.compiler.impl.classpath")
-            ?: throw IllegalStateException("old.compiler.impl.classpath system property not set")
-        
-        val urls = oldClasspath.split(java.io.File.pathSeparator)
-            .filter { it.isNotBlank() }
-            .map { Path.of(it).toUri().toURL() }
-            .toTypedArray()
-        
-        val parent = tryLoadSharedApiParent()
-        val implCl = URLClassLoader(urls, parent)
-        return KotlinToolchains.loadImplementation(implCl)
-    }
-    
-    /**
-     * Tries to load SharedApiClassesClassLoader as parent for proper class isolation.
-     */
-    private fun tryLoadSharedApiParent(): ClassLoader {
-        return try {
-            val sharedApiCl = Class.forName("org.jetbrains.kotlin.buildtools.api.SharedApiClassesClassLoader")
-            val factoryMethod = sharedApiCl.getMethod("newInstance")
-            factoryMethod.invoke(null) as ClassLoader
-        } catch (_: Throwable) {
-            ClassLoader.getSystemClassLoader()
-        }
     }
 }
