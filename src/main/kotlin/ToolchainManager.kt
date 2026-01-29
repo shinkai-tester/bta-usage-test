@@ -1,6 +1,7 @@
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
 import org.jetbrains.kotlin.buildtools.api.KotlinToolchains
 import org.jetbrains.kotlin.buildtools.api.ExecutionPolicy
+import org.jetbrains.kotlin.buildtools.api.SharedApiClassesClassLoader
 import org.jetbrains.kotlin.buildtools.api.arguments.ExperimentalCompilerArgument
 import org.jetbrains.kotlin.buildtools.api.arguments.JvmCompilerArguments
 import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain
@@ -28,61 +29,44 @@ import kotlin.io.path.name
 class ToolchainManager {
     
     /**
-     * Loads the Kotlin toolchain with the appropriate classloader based on daemon usage.
+     * Loads the Kotlin toolchain with an isolated classloader.
      * 
-     * @param useDaemon If true, uses URLClassLoader and sets it as TCCL during initialization.
-     *                  If false, uses system/application classloader.
      * @return Configured KotlinToolchains instance
      */
-    fun loadToolchain(useDaemon: Boolean = false): KotlinToolchains {
-        // Always load implementation in an isolated classloader with SharedApiClassesClassLoader as parent
+    fun loadToolchain(): KotlinToolchains {
         val implCl = buildIsolatedImplClassLoader()
-        return if (useDaemon) {
-            val prev = Thread.currentThread().contextClassLoader
-            try {
-                Thread.currentThread().contextClassLoader = implCl
-                KotlinToolchains.loadImplementation(implCl)
-            } finally {
-                try { Thread.currentThread().contextClassLoader = prev } catch (_: Throwable) {}
-            }
-        } else {
-            KotlinToolchains.loadImplementation(implCl)
-        }
+        return loadToolchainWithClassLoader(implCl)
     }
     
     /**
-     * Creates a DaemonExecutionPolicy in a daemon-friendly context.
-     * Temporarily sets a URLClassLoader as TCCL while calling toolchain.daemonExecutionPolicyBuilder().
+     * Loads the Kotlin toolchain using a custom classpath.
+     * This is useful for testing with different compiler versions.
+     * 
+     * @param classpath The classpath string (paths separated by system path separator)
+     * @return Configured KotlinToolchains instance
+     */
+    fun loadToolchainWithClasspath(classpath: String): KotlinToolchains {
+        val urls = classpath.split(java.io.File.pathSeparator)
+            .filter { it.isNotBlank() }
+            .map { Path.of(it).toUri().toURL() }
+            .toTypedArray()
+        val parent = SharedApiClassesClassLoader()
+        val implCl = URLClassLoader(urls, parent)
+        return loadToolchainWithClassLoader(implCl)
+    }
+    
+    private fun loadToolchainWithClassLoader(implCl: URLClassLoader): KotlinToolchains {
+        return KotlinToolchains.loadImplementation(implCl)
+    }
+    
+    /**
+     * Creates a DaemonExecutionPolicy.
      * 
      * @param toolchain The Kotlin toolchain to create the daemon execution policy for
      * @return Configured ExecutionPolicy for daemon usage
      */
     fun createDaemonExecutionPolicy(toolchain: KotlinToolchains): ExecutionPolicy {
-        val cl = buildIsolatedImplClassLoader()
-        val prev = Thread.currentThread().contextClassLoader
-        return try {
-            Thread.currentThread().contextClassLoader = cl
-            toolchain.daemonExecutionPolicyBuilder().build()
-        } finally {
-            try { Thread.currentThread().contextClassLoader = prev } catch (_: Throwable) {}
-        }
-    }
-    
-    /**
-     * Executes a block with a URLClassLoader set as the thread context classloader to support daemon mode.
-     * 
-     * @param block The code block to execute in daemon context
-     * @return The result of executing the block
-     */
-    fun <T> withDaemonContext(block: () -> T): T {
-        val cl = buildIsolatedImplClassLoader()
-        val prev = Thread.currentThread().contextClassLoader
-        return try {
-            Thread.currentThread().contextClassLoader = cl
-            block()
-        } finally {
-            try { Thread.currentThread().contextClassLoader = prev } catch (_: Throwable) {}
-        }
+        return toolchain.daemonExecutionPolicyBuilder().build()
     }
     
     /**
@@ -159,22 +143,8 @@ class ToolchainManager {
     // --- Implementation classloader isolation helpers ---
     private fun buildIsolatedImplClassLoader(): URLClassLoader {
         val urls = getImplClasspathUrls()
-        val parent = tryLoadSharedApiParent()
+        val parent = SharedApiClassesClassLoader()
         return URLClassLoader(urls, parent)
-    }
-    
-    private fun tryLoadSharedApiParent(): ClassLoader {
-        // Try to instantiate SharedApiClassesClassLoader reflectively (available since 2.3.0)
-        return try {
-            val sharedApiCl = Class.forName("org.jetbrains.kotlin.buildtools.api.SharedApiClassesClassLoader")
-            // Call the factory method to get an instance
-            val factoryMethod = sharedApiCl.getMethod("newInstance")
-            val instance = factoryMethod.invoke(null)
-            instance as ClassLoader
-        } catch (_: Throwable) {
-            // Fallback: system classloader
-            ClassLoader.getSystemClassLoader()
-        }
     }
     
     private fun getImplClasspathUrls(): Array<URL> {

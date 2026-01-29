@@ -42,13 +42,11 @@ class ExecutionPolicyTest : TestBase() {
             fun reverse(s: String) = s.reversed()
         """)
         
-        val toolchain = framework.loadToolchain(useDaemon = true)
+        val toolchain = framework.loadToolchain()
         val operation = CompilationTestUtils.newJvmOp(toolchain, listOf(source), setup.outputDirectory, framework)
 
         val daemonPolicy = framework.createDaemonExecutionPolicy(toolchain)
-        val result = framework.withDaemonContext {
-            CompilationTestUtils.runCompile(toolchain, operation, daemonPolicy)
-        }
+        val result = CompilationTestUtils.runCompile(toolchain, operation, daemonPolicy)
 
         assertEquals(CompilationResult.COMPILATION_SUCCESS, result)
     }
@@ -61,16 +59,14 @@ class ExecutionPolicyTest : TestBase() {
             fun double(x: Int) = x * 2
         """)
 
-        val toolchain = framework.loadToolchain(useDaemon = true)
+        val toolchain = framework.loadToolchain()
         val operation = CompilationTestUtils.newJvmOp(toolchain, listOf(source), setup.outputDirectory, framework)
 
         val daemonPolicy = framework.createDaemonExecutionPolicy(toolchain)
 
         daemonPolicy.configureDaemon(listOf("Xmx3g", "Xms1g"))
 
-        val result = framework.withDaemonContext {
-            CompilationTestUtils.runCompile(toolchain, operation, daemonPolicy)
-        }
+        val result = CompilationTestUtils.runCompile(toolchain, operation, daemonPolicy)
 
         assertEquals(CompilationResult.COMPILATION_SUCCESS, result)
     }

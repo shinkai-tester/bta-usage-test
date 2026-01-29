@@ -23,7 +23,6 @@ class JvmCompilationTest : TestBase() {
     @Test
     @DisplayName("Compile simple Kotlin class")
     fun compileSimpleKotlinClass() {
-        // Given: A test setup with a simple Kotlin class
         val setup = createTestSetup()
         val source = framework.createKotlinSource(setup.workspace, "Bard.kt", """
             class Bard {
@@ -31,13 +30,11 @@ class JvmCompilationTest : TestBase() {
             }
         """)
 
-        // When: Compiling the Kotlin source with console logging enabled
         val toolchain = framework.loadToolchain()
         val operation = CompilationTestUtils.newJvmOp(toolchain, listOf(source), setup.outputDirectory, framework)
         val logger = TestLogger(printToConsole = true)
         val result = CompilationTestUtils.runCompile(toolchain, operation, logger)
 
-        // Then: Compilation should succeed and generate the expected class file
         assertCompilationSuccessful(result)
         assertClassFilesExist(setup.outputDirectory, "Bard")
     }
@@ -45,7 +42,6 @@ class JvmCompilationTest : TestBase() {
     @Test
     @DisplayName("Compile mixed Kotlin and Java sources")
     fun compileMixedKotlinAndJava() {
-        // Given: A test setup with both Kotlin and Java sources that interact
         val setup = createTestSetup()
         
         val kotlinSource = framework.createKotlinSource(setup.workspace, "Adventurer.kt", """
@@ -62,7 +58,6 @@ class JvmCompilationTest : TestBase() {
             }
         """)
 
-        // When: Compiling both sources together
         val toolchain = framework.loadToolchain()
         val operation = CompilationTestUtils.newJvmOp(
             toolchain,
@@ -72,7 +67,6 @@ class JvmCompilationTest : TestBase() {
         )
         val result = CompilationTestUtils.runCompile(toolchain, operation)
 
-        // Then: Compilation should succeed and generate both class files
         assertCompilationSuccessful(result)
         assertClassFilesExist(setup.outputDirectory, "Adventurer", "LoreCodex")
     }
@@ -80,7 +74,6 @@ class JvmCompilationTest : TestBase() {
     @Test
     @DisplayName("Fail compilation for invalid Kotlin code")
     fun failCompilationForInvalidCode() {
-        // Given: A test setup with invalid Kotlin code (unresolved reference)
         val setup = createTestSetup()
         val source = framework.createKotlinSource(setup.workspace, "CursedScroll.kt", """
             class CursedScroll {
@@ -88,17 +81,14 @@ class JvmCompilationTest : TestBase() {
             }
         """)
 
-        // When: Attempting to compile the invalid source
         val toolchain = framework.loadToolchain()
         val operation = CompilationTestUtils.newJvmOp(toolchain, listOf(source), setup.outputDirectory, framework)
         val testLogger = framework.createTestLogger()
         val result = CompilationTestUtils.runCompile(toolchain, operation, testLogger)
 
-        // Then: Compilation should fail with appropriate error messages
         assertCompilationFailed(result)
         assertNoClassFilesGenerated(setup.outputDirectory)
         
-        // And: Error messages should be captured and contain relevant information
         val errorMessages = testLogger.getAllErrorMessages()
         assertTrue(errorMessages.isNotEmpty(), "Expected compilation error messages to be logged")
         
@@ -113,29 +103,22 @@ class JvmCompilationTest : TestBase() {
     @Disabled("Not stable")
     @DisplayName("Handle daemon execution failures with retries")
     fun handleDaemonExecutionFailures() {
-        // Given: A test setup with daemon configuration that will fail
         val setup = createTestSetup()
         val source = framework.createKotlinSource(setup.workspace, "ErrorTest.kt", """
             fun test() = "should fail due to daemon startup error"
         """)
 
-        // When: Attempting compilation with invalid daemon JVM arguments
-        val toolchain = framework.loadToolchain(useDaemon = true)
+        val toolchain = framework.loadToolchain()
         val operation = CompilationTestUtils.newJvmOp(toolchain, listOf(source), setup.outputDirectory, framework)
         val daemonPolicy = framework.createDaemonExecutionPolicy(toolchain)
         
-        // Configure daemon with invalid JVM arguments that will cause startup failure
         daemonPolicy.configureDaemon(listOf("--Xmx3g"))
         
         val testLogger = framework.createTestLogger()
-        val result = framework.withDaemonContext {
-            CompilationTestUtils.runCompile(toolchain, operation, daemonPolicy, testLogger)
-        }
+        val result = CompilationTestUtils.runCompile(toolchain, operation, daemonPolicy, testLogger)
 
-        // Then: Should get internal compilation error due to daemon startup failure
         assertCompilationInternalError(result)
 
-        // And: Should verify the expected number of retry attempts were made
         val retryCount = testLogger.getRetryCount()
         assertTrue(retryCount != null, "Expected to find retry count in error messages")
         assertEquals(4, retryCount, "Expected daemon to fail after 4 retries (3 startup attempts + 1 final failure)")

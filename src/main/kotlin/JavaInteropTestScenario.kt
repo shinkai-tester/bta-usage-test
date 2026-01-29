@@ -22,7 +22,7 @@ class JavaInteropTestScenario(private val framework: BtaTestFramework) {
     private val javaOut = javaWs.resolve("out").createDirectories()
     private val kotlinOut = kotlinWs.resolve("out").createDirectories()
     private val kotlinIc = kotlinWs.resolve("ic").createDirectories()
-    private val toolchain = framework.loadToolchain(useDaemon = true)
+    private val toolchain = framework.loadToolchain()
     
     private var javaSource: Path? = null
     private var kotlinSource: Path? = null

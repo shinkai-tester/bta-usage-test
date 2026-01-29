@@ -55,7 +55,7 @@ public class JvmPlatformToolchainTest {
             }
         """);
 
-        KotlinToolchains toolchains = framework.loadToolchain(false);
+        KotlinToolchains toolchains = framework.loadToolchain();
 
         // ===== TEST THE .from() API =====
         // Obtain the JvmPlatformToolchain using the Java-friendly static accessor.

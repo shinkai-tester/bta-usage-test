@@ -18,7 +18,7 @@ import kotlin.io.path.writeText
 class IncrementalCompilationTestBuilder(private val framework: BtaTestFramework, private val logger: TestLogger? = null) {
     
     private val modules = mutableMapOf<String, ModuleSetup>()
-    private val toolchain = framework.loadToolchain(useDaemon = true)
+    private val toolchain = framework.loadToolchain()
     private val root = framework.createTempWorkspace()
     
     /**

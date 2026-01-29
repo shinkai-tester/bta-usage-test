@@ -62,34 +62,33 @@ class BtaTestFramework {
     }
 
     /**
-     * Loads the Kotlin toolchain with appropriate classloader based on daemon usage.
+     * Loads the Kotlin toolchain with an isolated classloader.
      * 
-     * @param useDaemon If true, uses URLClassLoader and sets it as TCCL during initialization.
-     *                  If false, uses system/application classloader.
      * @return Configured KotlinToolchains instance
      */
-    fun loadToolchain(useDaemon: Boolean = false): KotlinToolchains {
-        return toolchainManager.loadToolchain(useDaemon)
+    fun loadToolchain(): KotlinToolchains {
+        return toolchainManager.loadToolchain()
     }
 
     /**
-     * Creates a DaemonExecutionPolicy in a daemon-friendly context.
+     * Loads the Kotlin toolchain using a custom classpath.
+     * This is useful for testing with different compiler versions.
+     * 
+     * @param classpath The classpath string (paths separated by system path separator)
+     * @return Configured KotlinToolchains instance
+     */
+    fun loadToolchainWithClasspath(classpath: String): KotlinToolchains {
+        return toolchainManager.loadToolchainWithClasspath(classpath)
+    }
+
+    /**
+     * Creates a DaemonExecutionPolicy.
      * 
      * @param toolchain The Kotlin toolchain to create the daemon execution policy for
      * @return Configured ExecutionPolicy for daemon usage
      */
     fun createDaemonExecutionPolicy(toolchain: KotlinToolchains): ExecutionPolicy {
         return toolchainManager.createDaemonExecutionPolicy(toolchain)
-    }
-
-    /**
-     * Executes a block with a URLClassLoader set as the thread context classloader to support daemon mode.
-     * 
-     * @param block The code block to execute in daemon context
-     * @return The result of executing the block
-     */
-    fun <T> withDaemonContext(block: () -> T): T {
-        return toolchainManager.withDaemonContext(block)
     }
 
     /**
