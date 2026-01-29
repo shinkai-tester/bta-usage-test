@@ -70,7 +70,7 @@ class LookupTrackerTest : TestBase() {
         val recordedLookups = mutableListOf<RecordedLookup>()
         val lookupTracker = createLookupTracker(recordedLookups)
 
-        val toolchain = framework.loadToolchain(useDaemon = true)
+        val toolchain = framework.loadToolchain()
         val sources = listOf(utilsSource, serviceSource)
         
         val operation = IncrementalCompilationUtils.newIncrementalJvmOp(
@@ -78,9 +78,7 @@ class LookupTrackerTest : TestBase() {
         )
 
         val daemonPolicy = framework.createDaemonExecutionPolicy(toolchain)
-        val result = framework.withDaemonContext {
-            CompilationTestUtils.runCompile(toolchain, operation, daemonPolicy)
-        }
+        val result = CompilationTestUtils.runCompile(toolchain, operation, daemonPolicy)
 
         assertCompilationSuccessful(result)
         assertTrue(recordedLookups.isNotEmpty(), "Lookup tracker should record lookups")
@@ -124,7 +122,7 @@ class LookupTrackerTest : TestBase() {
         val recordedLookups = mutableListOf<RecordedLookup>()
         val lookupTracker = createLookupTracker(recordedLookups)
 
-        val toolchain = framework.loadToolchain(useDaemon = false)
+        val toolchain = framework.loadToolchain()
         val sources = listOf(modelSource, repoSource)
         
         val operation = IncrementalCompilationUtils.newIncrementalJvmOp(
@@ -175,7 +173,7 @@ class LookupTrackerTest : TestBase() {
         val recordedLookups = mutableListOf<RecordedLookup>()
         val lookupTracker = createLookupTracker(recordedLookups)
 
-        val toolchain = framework.loadToolchain(useDaemon = true)
+        val toolchain = framework.loadToolchain()
         val baseOperation = CompilationTestUtils.newJvmOp(
             toolchain,
             listOf(extensionsSource, usageSource),
@@ -188,9 +186,7 @@ class LookupTrackerTest : TestBase() {
         val operation = opBuilder.build()
 
         val daemonPolicy = framework.createDaemonExecutionPolicy(toolchain)
-        val result = framework.withDaemonContext {
-            CompilationTestUtils.runCompile(toolchain, operation, daemonPolicy)
-        }
+        val result = CompilationTestUtils.runCompile(toolchain, operation, daemonPolicy)
 
         assertCompilationSuccessful(result)
         assertTrue(recordedLookups.isNotEmpty(), "Lookup tracker should record lookups")
@@ -236,7 +232,7 @@ class LookupTrackerTest : TestBase() {
         val recordedLookups = mutableListOf<RecordedLookup>()
         val lookupTracker = createLookupTracker(recordedLookups)
 
-        val toolchain = framework.loadToolchain(useDaemon = false)
+        val toolchain = framework.loadToolchain()
         val baseOperation = CompilationTestUtils.newJvmOp(
             toolchain,
             listOf(configSource, usageSource),

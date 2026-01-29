@@ -36,7 +36,7 @@ fun main(vararg implClasspath: String) {
 
     // --- 2) Load toolchain using isolated classloader (via framework/manager) ---
     val useDaemon = false // set to true if you want to test daemon; logs differ slightly
-    val toolchain = framework.loadToolchain(useDaemon)
+    val toolchain = framework.loadToolchain()
 
     // --- 3) Create operation using builder pattern ---
     val jvmToolchain = toolchain.getToolchain(JvmPlatformToolchain::class.java)

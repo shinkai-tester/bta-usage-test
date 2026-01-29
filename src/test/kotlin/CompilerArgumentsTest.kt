@@ -15,7 +15,7 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalBuildToolsApi::class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-@Suppress("DEPRECATION") // Tests intentionally use deprecated mutable compiler arguments API
+@Suppress("DEPRECATION")
 class CompilerArgumentsTest : TestBase() {
 
     private lateinit var toolchain: KotlinToolchains
@@ -23,7 +23,7 @@ class CompilerArgumentsTest : TestBase() {
 
     @BeforeAll
     fun initCommonToolchain() {
-        toolchain = framework.loadToolchain(useDaemon = true)
+        toolchain = framework.loadToolchain()
         daemonPolicy = framework.createDaemonExecutionPolicy(toolchain).also { it.configureDaemon() }
     }
 
@@ -31,7 +31,6 @@ class CompilerArgumentsTest : TestBase() {
     @DisplayName("Check usage of common compiler arguments")
     fun testCommonCompilerArguments() {
         val setup = createTestSetup()
-        // Define an opt-in marker and an API that requires it
         val annotationsKt = framework.createKotlinSource(
             setup.workspace, "annotations.kt", """
         package test.common
@@ -48,7 +47,6 @@ class CompilerArgumentsTest : TestBase() {
         package test.common
         
         fun callExp(): String {
-            // Experimental API requires opt-in
             return experimentalApi()
         }
     """
@@ -78,9 +76,7 @@ class CompilerArgumentsTest : TestBase() {
         }
 
         val logger = TestLogger()
-        val result = framework.withDaemonContext {
-            CompilationTestUtils.runCompile(toolchain, op, daemonPolicy, logger)
-        }
+        val result = CompilationTestUtils.runCompile(toolchain, op, daemonPolicy, logger)
         assertCompilationSuccessful(result)
         assertClassFilesExist(setup.outputDirectory, "AnnotationsKt", "UseExperimentalKt")
     }
@@ -106,7 +102,6 @@ class CompilerArgumentsTest : TestBase() {
         args[JvmCompilerArguments.MODULE_NAME] = "simple-module"
         args[JvmCompilerArguments.JAVA_PARAMETERS] = true
 
-        // Verify CLI arguments conversion for selected options
         val cli = invokeToArgumentStrings(args)
         val joined = cli.joinToString(" ") { it.replace("\"", "") }
         assertTrue(joined.contains("-jvm-target 17"), joined)
@@ -122,13 +117,10 @@ class CompilerArgumentsTest : TestBase() {
             }
         }
 
-        val result = framework.withDaemonContext {
-            CompilationTestUtils.runCompile(toolchain, op, daemonPolicy, TestLogger())
-        }
+        val result = CompilationTestUtils.runCompile(toolchain, op, daemonPolicy, TestLogger())
         assertCompilationSuccessful(result)
         assertClassFilesExist(setup.outputDirectory, "SimpleKt", "Greeter")
 
-        // Bytecode target for JVM 17 -> major version 61
         val bytes = CompilationTestUtils.readClassOutputBytes(setup.outputDirectory, "Greeter.class")
         assertNotNull(bytes)
         val major = readClassFileMajorVersion(bytes)
@@ -145,16 +137,13 @@ class CompilerArgumentsTest : TestBase() {
         """
         )
 
-        // Force an invalid classpath (no stdlib) together with NO_STDLIB to provoke errors when stdlib is needed
         val op = CompilationTestUtils.newJvmOp(toolchain, listOf(src), setup.outputDirectory, framework)
         val args = op.compilerArguments
         args[JvmCompilerArguments.NO_STDLIB] = true
-        args[JvmCompilerArguments.CLASSPATH] = "" // clear classpath
+        args[JvmCompilerArguments.CLASSPATH] = ""
 
         val logger = TestLogger()
-        val result = framework.withDaemonContext {
-            CompilationTestUtils.runCompile(toolchain, op, daemonPolicy, logger)
-        }
+        val result = CompilationTestUtils.runCompile(toolchain, op, daemonPolicy, logger)
         assertCompilationFailed(result)
         assertTrue(
             logger.getAllErrorMessages()
@@ -166,11 +155,7 @@ class CompilerArgumentsTest : TestBase() {
         )
     }
 
-
-    // ------------------------- Helpers -------------------------
-
     private fun readClassFileMajorVersion(bytes: ByteArray): Int {
-        // Class file format: 0-3: 0xCAFEBABE, 4-5: minor, 6-7: major
         require(bytes.size >= 8)
         fun u2(i: Int) = ((bytes[i].toInt() and 0xFF) shl 8) or (bytes[i + 1].toInt() and 0xFF)
         val magic =
@@ -191,7 +176,6 @@ class CompilerArgumentsTest : TestBase() {
         return result as List<String>
     }
 
-    // Tries to call toCompilerArguments() reflectively and return the resulting K2JVMCompilerArguments instance.
     private fun toCompilerArgumentsOrNull(args: Any): Any? {
         val method = args.javaClass.methods.firstOrNull { it.name == "toCompilerArguments" && it.parameterCount == 0 }
             ?: return null
@@ -214,7 +198,6 @@ class CompilerArgumentsTest : TestBase() {
                 val m = cls.getMethod(candidate)
                 return m.invoke(instance)
             } catch (_: Throwable) {
-                // try next
             }
         }
         return try {

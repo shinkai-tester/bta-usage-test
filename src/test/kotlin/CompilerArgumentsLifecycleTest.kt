@@ -8,7 +8,7 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalBuildToolsApi::class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-@Suppress("DEPRECATION") // Tests intentionally use deprecated mutable compiler arguments API
+@Suppress("DEPRECATION")
 class CompilerArgumentsLifecycleTest : TestBase() {
 
     private lateinit var toolchain: KotlinToolchains
@@ -16,7 +16,7 @@ class CompilerArgumentsLifecycleTest : TestBase() {
 
     @BeforeAll
     fun initCommonToolchain() {
-        toolchain = framework.loadToolchain(useDaemon = false) // Use in-process mode
+        toolchain = framework.loadToolchain()
         daemonPolicy = toolchain.createInProcessExecutionPolicy()
     }
 
@@ -37,9 +37,7 @@ class CompilerArgumentsLifecycleTest : TestBase() {
         args[CommonCompilerArguments.X_NO_INLINE] = true
         args[JvmCompilerArguments.X_DEBUG] = true
 
-        val result = framework.withDaemonContext {
-            CompilationTestUtils.runCompile(toolchain, op, daemonPolicy)
-        }
+        val result = CompilationTestUtils.runCompile(toolchain, op, daemonPolicy)
 
         assertCompilationSuccessful(result, "Experimental argument with opt-in should work")
     }
@@ -58,15 +56,12 @@ class CompilerArgumentsLifecycleTest : TestBase() {
         val op = newJvmOp(toolchain, listOf(src), setup.outputDirectory, framework)
         val args = op.compilerArguments
 
-        // Use an option marked as removed within the support window in your API build
         args[JvmCompilerArguments.X_USE_K2_KAPT] = true
 
         val logger = TestLogger(true)
         var thrown: Throwable? = null
         val result = try {
-            framework.withDaemonContext {
-                CompilationTestUtils.runCompile(toolchain, op, daemonPolicy, logger)
-            }
+            CompilationTestUtils.runCompile(toolchain, op, daemonPolicy, logger)
         } catch (t: Throwable) {
             thrown = t
             null
@@ -90,11 +85,9 @@ class CompilerArgumentsLifecycleTest : TestBase() {
         val joined = (errors + extra).joinToString("\n")
         println("[testRemovedArgument] Diagnostics (errors + throwable chain):\n$joined")
 
-        // Must mention an unrecognized parameter and that it was removed ("introduced in" may or may not appear)
         assertTrue(joined.contains("Compiler parameter not recognized", ignoreCase = true))
         assertTrue(joined.contains("removed in", ignoreCase = true))
 
-        // Cause should originate from reflective access to a missing property
         assertTrue(
             joined.contains("NoSuchMethodError") ||
                     joined.contains("No property found with name", ignoreCase = true),
@@ -117,14 +110,10 @@ class CompilerArgumentsLifecycleTest : TestBase() {
         val op = newJvmOp(toolchain, listOf(src), setup.outputDirectory, framework)
         val args = op.compilerArguments
 
-        // Use a key annotated with @DeprecatedCompilerArgument in the generated API
         args[JvmCompilerArguments.X_JVM_DEFAULT] = "all"
 
-        val result = framework.withDaemonContext {
-            CompilationTestUtils.runCompile(toolchain, op, daemonPolicy, logger)
-        }
+        val result = CompilationTestUtils.runCompile(toolchain, op, daemonPolicy, logger)
 
-        // Should compile successfully when opted in; BTA doesn’t guarantee a runtime deprecation warning
         assertCompilationSuccessful(result, "Deprecated argument should still work at runtime with opt-in")
     }
 
@@ -167,9 +156,7 @@ class CompilerArgumentsLifecycleTest : TestBase() {
 
         val msg = ex.message ?: ""
         println("[testAvailableSince_guard_on_set] Caught expected IllegalStateException: $msg")
-        // Always must mention the key and the phrase
         assertTrue(msg.contains("X_FAKE_FUTURE_FLAG is available only since"), msg)
-        // Accept either the pretty version (if the generator later switches to releaseName) or the current object toString
         val hasReadableOrObjectVersion =
             msg.contains("9.9.9") || msg.contains("org.jetbrains.kotlin.buildtools.api.KotlinReleaseVersion@")
         assertTrue(
