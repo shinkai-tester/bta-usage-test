@@ -3,8 +3,10 @@
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import java.io.File
 
+val kotlinVersion = "2.4.0-dev-2633" // 2.4.255-SNAPSHOT + mavenLocal() for faster testing of fixes
+
 plugins {
-    kotlin("jvm") version "2.4.0-dev-539" // 2.4.255-SNAPSHOT + mavenLocal() for faster testing of fixes
+    kotlin("jvm") version "2.4.0-dev-2633"
     kotlin("plugin.power-assert") version "2.3.20-Beta1"
 }
 
@@ -14,10 +16,10 @@ configurations {
 }
 
 dependencies {
-    implementation("org.jetbrains.kotlin:kotlin-build-tools-api:2.4.0-dev-539") // 2.4.255-SNAPSHOT
-    runtimeOnly("org.jetbrains.kotlin:kotlin-reflect:2.4.0-dev-539")
+    implementation("org.jetbrains.kotlin:kotlin-build-tools-api:$kotlinVersion")
+    runtimeOnly("org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion")
     // Keep compiler impl off the app classpath; they will be passed explicitly at runtime
-    "myCompiler"("org.jetbrains.kotlin:kotlin-build-tools-impl:2.4.0-dev-539") // 2.4.255-SNAPSHOT
+    "myCompiler"("org.jetbrains.kotlin:kotlin-build-tools-impl:$kotlinVersion")
     // Old compiler for backward compatibility testing (cancellation not supported before 2.3.20)
     "oldCompiler"("org.jetbrains.kotlin:kotlin-build-tools-impl:2.3.0")
 
@@ -33,7 +35,7 @@ tasks.test {
         "compiler.impl.classpath",
         configurations.getByName("myCompiler").files.joinToString(File.pathSeparator) { it.absolutePath }
     )
-    // Provide old compiler classpath for backward compatibility testing
+    // Provide an old compiler classpath for backward compatibility testing
     systemProperty(
         "old.compiler.impl.classpath",
         configurations.getByName("oldCompiler").files.joinToString(File.pathSeparator) { it.absolutePath }

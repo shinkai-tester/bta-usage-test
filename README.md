@@ -106,7 +106,14 @@ Run the example with:
 - **Extension function lookups with non-incremental + daemon** tests extension function lookups during non-incremental compilation with daemon execution
 - **Property access lookups with non-incremental + in-process** verifies property access lookups during non-incremental compilation with in-process execution
 
-##### 8. **`JvmPlatformToolchainTest.java`** - Java API Compatibility Test
+##### 8. **`BuilderImmutabilityTest.kt`** - Builder Immutability Tests
+**Purpose**: verifies the immutability contract of BTA build operations and builders.
+
+**What it tests**:
+- **Builder modification after build** ensures that modifying a builder after `build()` does not affect the already-built operation
+- **toBuilder round-trip immutability** verifies that `toBuilder()` creates an independent copy, so modifying the new builder does not affect the original operation
+
+##### 9. **`JvmPlatformToolchainTest.java`** - Java API Compatibility Test
 **Purpose**: verifies that the Build Tools API can be used from Java code.
 
 **What it tests**:

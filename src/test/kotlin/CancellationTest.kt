@@ -110,8 +110,7 @@ class CancellationTest : TestBase() {
         val icBuilder = opBuilder.snapshotBasedIcConfigurationBuilder(
             icDir,
             SourcesChanges.Unknown,
-            emptyList(),
-            icDir.resolve("shrunk-classpath-snapshot.bin")
+            emptyList()
         )
         icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.KEEP_IC_CACHES_IN_MEMORY] = true
         icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.OUTPUT_DIRS] = setOf(setup.outputDirectory, icDir)
@@ -152,8 +151,7 @@ class CancellationTest : TestBase() {
         val icBuilder = opBuilder.snapshotBasedIcConfigurationBuilder(
             icDir,
             SourcesChanges.Unknown,
-            emptyList(),
-            icDir.resolve("shrunk-classpath-snapshot.bin")
+            emptyList()
         )
         icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.KEEP_IC_CACHES_IN_MEMORY] = true
         icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.OUTPUT_DIRS] = setOf(setup.outputDirectory, icDir)
