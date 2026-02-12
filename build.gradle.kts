@@ -25,11 +25,11 @@ dependencies {
 
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter:6.0.2")
+    testImplementation("org.junit.jupiter:junit-jupiter-params:6.0.2")
 }
 
 tasks.test {
     useJUnitPlatform()
-    systemProperty("junit.jupiter.testclass.order.default", $$"org.junit.jupiter.api.ClassOrderer$OrderAnnotation")
     // Provide an isolated impl classpath to tests for deterministic behavior
     systemProperty(
         "compiler.impl.classpath",
@@ -52,5 +52,13 @@ tasks.register<JavaExec>("run") {
 }
 
 powerAssert {
-    functions.set(listOf("kotlin.assert", "kotlin.test.assertTrue", "kotlin.test.assertEquals", "kotlin.test.assertNull"))
+    functions.set(
+        listOf(
+            "kotlin.assert",
+            "kotlin.test.assertTrue",
+            "kotlin.test.assertFalse",
+            "kotlin.test.assertEquals",
+            "kotlin.test.assertNull"
+        )
+    )
 }

@@ -1,10 +1,15 @@
+package framework
+
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
 import org.jetbrains.kotlin.buildtools.api.KotlinLogger
 
 /**
- * Single, test-focused KotlinLogger that both captures and (optionally) prints
- * BTA logs. This avoids multiple logger implementations and keeps tests clean
- * while still showing the same output style as Main (d:, i:, w:, e:, l:).
+ * Test-focused KotlinLogger implementation that captures and optionally prints compilation logs.
+ *
+ * Captures all log messages (error, warn, info, lifecycle, debug) for later inspection
+ * and assertion in tests. Optionally prints messages to the console for debugging.
+ *
+ * @param printToConsole If true, logs are printed to the console in addition to being captured
  */
 @OptIn(ExperimentalBuildToolsApi::class)
 class TestLogger(
@@ -15,6 +20,7 @@ class TestLogger(
     private val infoMessages = mutableListOf<String>()
     private val lifecycleMessages = mutableListOf<String>()
     private val debugMessages = mutableListOf<String>()
+    override val isDebugEnabled: Boolean = true
 
     private fun print(prefix: String, msg: String, t: Throwable? = null) {
         if (!printToConsole) return
@@ -22,17 +28,14 @@ class TestLogger(
         if (t != null) println(prefix + t.stackTraceToString())
     }
 
-    // Capture + print error messages
     override fun error(msg: String, throwable: Throwable?) {
         errorMessages.add(msg)
         if (throwable != null) {
-            // capture throwable details to make assertions possible in tests
             errorMessages.add(throwable.message ?: throwable.toString())
         }
         print("e:", msg, throwable)
     }
 
-    // Capture + print warning messages
     override fun warn(msg: String) {
         warnMessages.add(msg)
         print("w:", msg)
@@ -46,33 +49,37 @@ class TestLogger(
         print("w:", msg, throwable)
     }
 
-    // Capture + print info messages
     override fun info(msg: String) {
         infoMessages.add(msg)
         print("i:", msg)
     }
 
-    // Capture + print lifecycle messages
     override fun lifecycle(msg: String) {
         lifecycleMessages.add(msg)
         print("l:", msg)
     }
-
-    // Enable debug logging and capture + print debug messages
-    override val isDebugEnabled: Boolean = true
 
     override fun debug(msg: String) {
         debugMessages.add(msg)
         print("d:", msg)
     }
 
-    // Methods to access captured messages
+    /** Returns all captured error messages as an immutable list. */
     fun getAllErrorMessages(): List<String> = errorMessages.toList()
+
+    /** Returns all captured warning messages as an immutable list. */
     fun getAllWarnMessages(): List<String> = warnMessages.toList()
+
+    /** Returns all captured info messages as an immutable list. */
     fun getAllInfoMessages(): List<String> = infoMessages.toList()
+
+    /** Returns all captured lifecycle messages as an immutable list. */
     fun getAllLifecycleMessages(): List<String> = lifecycleMessages.toList()
+
+    /** Returns all captured debug messages as an immutable list. */
     fun getAllDebugMessages(): List<String> = debugMessages.toList()
 
+    /** Returns all captured messages grouped by log level. */
     fun getAllMessages(): Map<String, List<String>> = mapOf(
         "error" to errorMessages.toList(),
         "warn" to warnMessages.toList(),
@@ -81,30 +88,4 @@ class TestLogger(
         "debug" to debugMessages.toList()
     )
 
-    // Specific extraction methods for common patterns
-    fun getRetryCount(): Int? {
-        // Look for messages like "Failed connecting to the daemon in 4 retries"
-        val retryPattern = Regex("""Failed connecting to the daemon in (\d+) retries""")
-        return errorMessages.firstNotNullOfOrNull { message ->
-            retryPattern.find(message)?.groupValues?.get(1)?.toIntOrNull()
-        }
-    }
-
-    fun hasCompilationErrors(): Boolean {
-        return errorMessages.any { it.contains("compilation", ignoreCase = true) }
-    }
-
-    fun hasAnyMessages(): Boolean {
-        return errorMessages.isNotEmpty() || warnMessages.isNotEmpty() ||
-               infoMessages.isNotEmpty() || lifecycleMessages.isNotEmpty() ||
-               debugMessages.isNotEmpty()
-    }
-
-    fun clear() {
-        errorMessages.clear()
-        warnMessages.clear()
-        infoMessages.clear()
-        lifecycleMessages.clear()
-        debugMessages.clear()
-    }
 }

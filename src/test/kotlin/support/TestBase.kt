@@ -1,3 +1,6 @@
+package support
+
+import BtaTestFacade
 import org.jetbrains.kotlin.buildtools.api.CompilationResult
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
 import java.nio.file.Files
@@ -20,25 +23,27 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalBuildToolsApi::class)
 abstract class TestBase {
 
-    protected val framework = BtaTestFramework()
+    protected val framework = BtaTestFacade()
 
     /**
-     * Represents the setup for a compilation test including workspace and output directory.
+     * Represents the setup for a compilation test including workspace, output, and IC directories.
      */
     protected data class CompilationTestSetup(
         val workspace: Path,
-        val outputDirectory: Path
+        val outputDirectory: Path,
+        val icDirectory: Path
     )
 
     /**
-     * Creates a standard test setup with workspace and output directory.
-     * 
-     * @return CompilationTestSetup containing workspace and output directory paths
+     * Creates a standard test setup with workspace, output directory, and IC directory.
+     *
+     * @return CompilationTestSetup containing workspace, output directory, and IC directory paths
      */
     protected fun createTestSetup(): CompilationTestSetup {
         val workspace = framework.createTempWorkspace()
         val outputDirectory = workspace.resolve("out").createDirectories()
-        return CompilationTestSetup(workspace, outputDirectory)
+        val icDirectory = workspace.resolve("ic").createDirectories()
+        return CompilationTestSetup(workspace, outputDirectory, icDirectory)
     }
 
     /**
@@ -102,7 +107,6 @@ abstract class TestBase {
      * Verifies that no class files were generated in the output directory.
      * 
      * @param outputDirectory The output directory to check
-     * @param message Optional custom message for assertion failure
      */
     protected fun assertNoClassFilesGenerated(
         outputDirectory: Path

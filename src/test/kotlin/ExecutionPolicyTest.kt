@@ -1,7 +1,15 @@
+import support.ExecutionPolicyArgumentProvider
+import support.TestBase
+import framework.configureDaemonPolicy
 import org.jetbrains.kotlin.buildtools.api.CompilationResult
+import org.jetbrains.kotlin.buildtools.api.ExecutionPolicy
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
+import org.jetbrains.kotlin.buildtools.api.KotlinToolchains
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ArgumentsSource
+import utils.CompilationTestUtils
 import kotlin.test.assertEquals
 
 /**
@@ -9,44 +17,25 @@ import kotlin.test.assertEquals
  * - In-process policy compiles successfully.
  * - Daemon policy compiles successfully when configured correctly.
  * - Daemon policy accepts custom JVM args.
- * 
- * Each test uses clear Arrange/Act/Assert (Given/When/Then) sections so it’s obvious what is being tested.
+ *
+ * Demonstrates both individual tests and parameterized tests for execution policy variations.
  */
 @OptIn(ExperimentalBuildToolsApi::class)
 class ExecutionPolicyTest : TestBase() {
 
-
-
-    @Test
-    @DisplayName("In-process execution policy")
-    fun testInProcessExecution() {
+    @ParameterizedTest(name = "{0}: {displayName}")
+    @ArgumentsSource(ExecutionPolicyArgumentProvider::class)
+    @DisplayName("Basic compilation succeeds")
+    fun testBasicCompilation(execution: Pair<KotlinToolchains, ExecutionPolicy>) {
+        val (toolchain, policy) = execution
         val setup = createTestSetup()
-        val source = framework.createKotlinSource(setup.workspace, "MathUtils.kt", """
-            fun square(x: Int) = x * x
-        """)
+        val source = framework.createKotlinSource(setup.workspace, "Utils.kt", $$"""
+            fun greet(name: String) = "Hello, $name"
+        """
+        )
 
-        val toolchain = framework.loadToolchain()
-        val operation = CompilationTestUtils.newJvmOp(toolchain, listOf(source), setup.outputDirectory, framework)
-
-        val inProcessPolicy = toolchain.createInProcessExecutionPolicy()
-        val result = CompilationTestUtils.runCompile(toolchain, operation, inProcessPolicy)
-
-        assertEquals(CompilationResult.COMPILATION_SUCCESS, result)
-    }
-
-    @Test
-    @DisplayName("Daemon execution policy")
-    fun testDaemonExecution() {
-        val setup = createTestSetup()
-        val source = framework.createKotlinSource(setup.workspace, "StringUtils.kt", """
-            fun reverse(s: String) = s.reversed()
-        """)
-        
-        val toolchain = framework.loadToolchain()
-        val operation = CompilationTestUtils.newJvmOp(toolchain, listOf(source), setup.outputDirectory, framework)
-
-        val daemonPolicy = framework.createDaemonExecutionPolicy(toolchain)
-        val result = CompilationTestUtils.runCompile(toolchain, operation, daemonPolicy)
+        val operation = framework.createJvmCompilationOperation(toolchain, listOf(source), setup.outputDirectory)
+        val result = CompilationTestUtils.runCompile(toolchain, operation, policy)
 
         assertEquals(CompilationResult.COMPILATION_SUCCESS, result)
     }
@@ -60,11 +49,9 @@ class ExecutionPolicyTest : TestBase() {
         """)
 
         val toolchain = framework.loadToolchain()
-        val operation = CompilationTestUtils.newJvmOp(toolchain, listOf(source), setup.outputDirectory, framework)
+        val operation = framework.createJvmCompilationOperation(toolchain, listOf(source), setup.outputDirectory)
 
-        val daemonPolicy = framework.createDaemonExecutionPolicy(toolchain)
-
-        daemonPolicy.configureDaemon(listOf("Xmx3g", "Xms1g"))
+        val daemonPolicy = configureDaemonPolicy(toolchain, listOf("Xmx3g", "Xms1g"))
 
         val result = CompilationTestUtils.runCompile(toolchain, operation, daemonPolicy)
 

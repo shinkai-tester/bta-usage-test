@@ -1,6 +1,8 @@
+import framework.TestLogger
+import framework.ToolchainManager
+import framework.WorkspaceManager
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
 import org.jetbrains.kotlin.buildtools.api.KotlinToolchains
-import org.jetbrains.kotlin.buildtools.api.ExecutionPolicy
 import org.jetbrains.kotlin.buildtools.api.arguments.JvmCompilerArguments
 import org.jetbrains.kotlin.buildtools.api.jvm.operations.JvmCompilationOperation
 import java.nio.file.Path
@@ -13,20 +15,18 @@ import java.nio.file.Path
  * - TestLogger: for capturing and analyzing log messages
  * - WorkspaceManager: for workspace and source file management
  * - ToolchainManager: for toolchain loading and configuration
- * 
- * This design follows the Single Responsibility Principle and makes the framework
- * more maintainable and testable.
+ *
  */
 @OptIn(ExperimentalBuildToolsApi::class)
-class BtaTestFramework {
+class BtaTestFacade {
 
     private val workspaceManager = WorkspaceManager()
     private val toolchainManager = ToolchainManager()
 
     /**
-     * Creates a new TestLogger instance for capturing compilation messages.
+     * Creates a new framework.TestLogger instance for capturing compilation messages.
      * 
-     * @return A new TestLogger instance
+     * @return a new framework.TestLogger instance
      */
     fun createTestLogger(): TestLogger = TestLogger()
 
@@ -50,18 +50,6 @@ class BtaTestFramework {
     }
 
     /**
-     * Creates a Java source file in the specified workspace.
-     * 
-     * @param workspace The workspace directory where the file should be created
-     * @param fileName The name of the Java source file (should end with .java)
-     * @param content The content of the source file (will be trimmed of indentation)
-     * @return Path to the created source file
-     */
-    fun createJavaSource(workspace: Path, fileName: String, content: String): Path {
-        return workspaceManager.createJavaSource(workspace, fileName, content)
-    }
-
-    /**
      * Loads the Kotlin toolchain with an isolated classloader.
      * 
      * @return Configured KotlinToolchains instance
@@ -82,19 +70,9 @@ class BtaTestFramework {
     }
 
     /**
-     * Creates a DaemonExecutionPolicy.
-     * 
-     * @param toolchain The Kotlin toolchain to create the daemon execution policy for
-     * @return Configured ExecutionPolicy for daemon usage
-     */
-    fun createDaemonExecutionPolicy(toolchain: KotlinToolchains): ExecutionPolicy {
-        return toolchainManager.createDaemonExecutionPolicy(toolchain)
-    }
-
-    /**
-     * Creates a new JVM compilation operation with minimal compilation settings.
-     * Uses the builder pattern to avoid deprecated APIs.
-     * 
+     * Creates a new JVM compilation operation with standard test configuration.
+     * Delegates to ToolchainManager for setup.
+     *
      * @param toolchain The Kotlin toolchain to use
      * @param sources List of source files to compile
      * @param outDir Output directory for compiled classes
@@ -105,8 +83,7 @@ class BtaTestFramework {
         sources: List<Path>,
         outDir: Path
     ): JvmCompilationOperation {
-        val workspace = workspaceManager.getLastWorkspace()
-        return toolchainManager.createJvmCompilationOperation(toolchain, sources, outDir, workspace)
+        return toolchainManager.setupJvmCompilationOperation(toolchain, sources, outDir)
     }
     
     

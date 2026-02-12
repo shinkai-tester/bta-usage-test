@@ -1,9 +1,11 @@
+import support.TestBase
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
 import org.jetbrains.kotlin.buildtools.api.arguments.JvmCompilerArguments
 import org.jetbrains.kotlin.buildtools.api.arguments.enums.JvmTarget
 import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import utils.CompilationTestUtils
 import kotlin.test.assertEquals
 
 /**
@@ -39,7 +41,8 @@ class BuilderImmutabilityTest : TestBase() {
         assertEquals("original-module", operation.compilerArguments[JvmCompilerArguments.MODULE_NAME])
         assertEquals(JvmTarget.JVM_17, operation.compilerArguments[JvmCompilerArguments.JVM_TARGET])
 
-        val result = CompilationTestUtils.runCompile(toolchain, operation)
+        val policy = toolchain.createInProcessExecutionPolicy()
+        val result = CompilationTestUtils.runCompile(toolchain, operation, policy)
         assertCompilationSuccessful(result)
     }
 

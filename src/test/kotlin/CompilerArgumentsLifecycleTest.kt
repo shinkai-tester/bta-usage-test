@@ -1,9 +1,11 @@
-import CompilationTestUtils.newJvmOp
+import support.TestBase
+import framework.TestLogger
 import org.jetbrains.kotlin.buildtools.api.*
 import org.jetbrains.kotlin.buildtools.api.arguments.CommonCompilerArguments
 import org.jetbrains.kotlin.buildtools.api.arguments.ExperimentalCompilerArgument
 import org.jetbrains.kotlin.buildtools.api.arguments.JvmCompilerArguments
 import org.junit.jupiter.api.*
+import utils.CompilationTestUtils
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalBuildToolsApi::class)
@@ -31,7 +33,7 @@ class CompilerArgumentsLifecycleTest : TestBase() {
         """
         )
 
-        val op = newJvmOp(toolchain, listOf(src), setup.outputDirectory, framework)
+        val op = framework.createJvmCompilationOperation(toolchain, listOf(src), setup.outputDirectory)
         val args = op.compilerArguments
 
         args[CommonCompilerArguments.X_NO_INLINE] = true
@@ -53,7 +55,7 @@ class CompilerArgumentsLifecycleTest : TestBase() {
         """
         )
 
-        val op = newJvmOp(toolchain, listOf(src), setup.outputDirectory, framework)
+        val op = framework.createJvmCompilationOperation(toolchain, listOf(src), setup.outputDirectory)
         val args = op.compilerArguments
 
         args[JvmCompilerArguments.X_USE_K2_KAPT] = true
@@ -107,7 +109,7 @@ class CompilerArgumentsLifecycleTest : TestBase() {
         """
         )
 
-        val op = newJvmOp(toolchain, listOf(src), setup.outputDirectory, framework)
+        val op = framework.createJvmCompilationOperation(toolchain, listOf(src), setup.outputDirectory)
         val args = op.compilerArguments
 
         args[JvmCompilerArguments.X_JVM_DEFAULT] = "all"
@@ -125,7 +127,7 @@ class CompilerArgumentsLifecycleTest : TestBase() {
         fun foo() = 42
     """)
 
-        val op = newJvmOp(toolchain, listOf(src), setup.outputDirectory, framework)
+        val op = framework.createJvmCompilationOperation(toolchain, listOf(src), setup.outputDirectory)
 
         val ex = Assertions.assertThrows(CompilerArgumentsParseException::class.java) {
             op.compilerArguments.applyArgumentStrings(listOf("-jvm-target"))
@@ -142,7 +144,7 @@ class CompilerArgumentsLifecycleTest : TestBase() {
     """
         )
 
-        val op = newJvmOp(toolchain, listOf(src), setup.outputDirectory, framework)
+        val op = framework.createJvmCompilationOperation(toolchain, listOf(src), setup.outputDirectory)
         val args = op.compilerArguments
 
         val future = JvmCompilerArguments.JvmCompilerArgument<Boolean>(

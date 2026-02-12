@@ -1,43 +1,40 @@
+package framework
+
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
 import org.jetbrains.kotlin.buildtools.api.KotlinToolchains
-import org.jetbrains.kotlin.buildtools.api.ExecutionPolicy
 import org.jetbrains.kotlin.buildtools.api.SharedApiClassesClassLoader
 import org.jetbrains.kotlin.buildtools.api.arguments.ExperimentalCompilerArgument
 import org.jetbrains.kotlin.buildtools.api.arguments.JvmCompilerArguments
 import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain
 import org.jetbrains.kotlin.buildtools.api.jvm.operations.JvmCompilationOperation
+import utils.StdlibUtils
+import java.io.File
 import java.net.URL
 import java.net.URLClassLoader
-import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.absolutePathString
-import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
-import kotlin.io.path.extension
 import kotlin.io.path.isDirectory
-import kotlin.io.path.isRegularFile
 import kotlin.io.path.name
 
 /**
- * Manages Kotlin toolchain operations including loading, daemon management, and compilation configuration.
- * 
+ * Manages Kotlin toolchain operations including loading and compilation configuration.
+ *
  * This class is responsible for all toolchain-related operations such as loading the Kotlin toolchain,
- * managing daemon execution policies, and configuring compilation operations. It follows the Single
- * Responsibility Principle by focusing solely on toolchain management.
+ * configuring compiler arguments, and setting up compilation operations.
  */
 @OptIn(ExperimentalBuildToolsApi::class, ExperimentalCompilerArgument::class)
 class ToolchainManager {
-    
+
     /**
      * Loads the Kotlin toolchain with an isolated classloader.
      * 
-     * @return Configured KotlinToolchains instance
+     * @return KotlinToolchains instance
      */
     fun loadToolchain(): KotlinToolchains {
-        val implCl = buildIsolatedImplClassLoader()
-        return loadToolchainWithClassLoader(implCl)
+        return KotlinToolchains.loadImplementation(getIsolatedClassLoader())
     }
-    
+
     /**
      * Loads the Kotlin toolchain using a custom classpath.
      * This is useful for testing with different compiler versions.
@@ -46,112 +43,82 @@ class ToolchainManager {
      * @return Configured KotlinToolchains instance
      */
     fun loadToolchainWithClasspath(classpath: String): KotlinToolchains {
-        val urls = classpath.split(java.io.File.pathSeparator)
+        val urls = classpath.split(File.pathSeparator)
             .filter { it.isNotBlank() }
             .map { Path.of(it).toUri().toURL() }
             .toTypedArray()
-        val parent = SharedApiClassesClassLoader()
-        val implCl = URLClassLoader(urls, parent)
-        return loadToolchainWithClassLoader(implCl)
+        return KotlinToolchains.loadImplementation(URLClassLoader(urls, SharedApiClassesClassLoader()))
     }
-    
-    private fun loadToolchainWithClassLoader(implCl: URLClassLoader): KotlinToolchains {
-        return KotlinToolchains.loadImplementation(implCl)
-    }
-    
+
     /**
-     * Creates a DaemonExecutionPolicy.
-     * 
-     * @param toolchain The Kotlin toolchain to create the daemon execution policy for
-     * @return Configured ExecutionPolicy for daemon usage
-     */
-    fun createDaemonExecutionPolicy(toolchain: KotlinToolchains): ExecutionPolicy {
-        return toolchain.daemonExecutionPolicyBuilder().build()
-    }
-    
-    /**
-     * Creates a new JVM compilation operation with minimal compilation settings using the builder pattern.
-     * 
-     * Sets up the compilation with:
-     * - NO_STDLIB = true (prevent automatic inclusion)
-     * - NO_REFLECT = true (prevent automatic inclusion)
-     * - CLASSPATH = explicit stdlib path (full control)
-     * - Module name for incremental compilation support
-     * - JDK home and module path for Java source compilation
-     * 
+     * Sets up a JVM compilation operation with standard test configuration.
+     *
+     * Configures the compilation with basic compiler arguments (NO_STDLIB, NO_REFLECT, CLASSPATH with stdlib,
+     * MODULE_NAME) and JDK settings (JDK_HOME, MODULE_PATH) to enable Java source compilation alongside Kotlin.
+     *
      * @param toolchain The Kotlin toolchain to use
      * @param sources List of source files to compile
      * @param outDir Output directory for compiled classes
-     * @param workspace Optional workspace path for Java source roots
-     * @return Configured JvmCompilationOperation
+     * @return Configured JvmCompilationOperation ready to execute
      */
-    fun createJvmCompilationOperation(
+    fun setupJvmCompilationOperation(
         toolchain: KotlinToolchains,
         sources: List<Path>,
-        outDir: Path,
-        workspace: Path? = null
+        outDir: Path
     ): JvmCompilationOperation {
         val jvmToolchain = toolchain.getToolchain(JvmPlatformToolchain::class.java)
         val builder = jvmToolchain.jvmCompilationOperationBuilder(sources, outDir)
         val args = builder.compilerArguments
-        
-        // Use shared configuration for basic compiler arguments
-        configureBasicCompilerArguments(args, "test-module")
 
-        // Provide JDK home and module path to enable Java source compilation alongside Kotlin
+        configureBasicCompilerArguments(args, "test-module")
         configureJdkSettings(args)
-        
-        // Configure Java source roots if workspace is provided
-        workspace?.let { configureJavaSourceRoots(args, it) }
-        
+
         return builder.build()
     }
-    
-    
+
     /**
      * Locates the kotlin-stdlib JAR file on the classpath.
-     * Uses shared StdlibUtils to avoid code duplication with Main.kt.
-     * 
+     * Delegates to utils.StdlibUtils to avoid code duplication.
+     *
      * @return Path to the kotlin-stdlib JAR file
      * @throws IllegalStateException if the stdlib JAR cannot be located
      */
     fun findStdlibJar(): String = StdlibUtils.findStdlibJar()
-    
+
     /**
      * Configures basic compiler arguments that are common across all compilation scenarios.
      * Sets NO_STDLIB, NO_REFLECT, CLASSPATH (with stdlib), and MODULE_NAME.
-     * 
+     *
      * This method centralizes the common compiler argument configuration to avoid code duplication
-     * across IncrementalCompilationTestBuilder, JavaInteropTestScenario, CancellationTest, etc.
-     * 
+     * across different test scenarios and IC operations.
+     *
      * @param args The compiler arguments builder to configure
      * @param moduleName The module name to set for the compilation
      */
     fun configureBasicCompilerArguments(args: JvmCompilerArguments.Builder, moduleName: String) {
         args[JvmCompilerArguments.NO_STDLIB] = true
         args[JvmCompilerArguments.NO_REFLECT] = true
-        
+
         val stdlib = findStdlibJar()
         val classpath = listOfNotNull(stdlib)
             .filter { it.isNotBlank() && Path.of(it).exists() }
-            .joinToString(java.io.File.pathSeparator)
+            .joinToString(File.pathSeparator)
         args[JvmCompilerArguments.CLASSPATH] = classpath
-        
+
         args[JvmCompilerArguments.MODULE_NAME] = moduleName
     }
-    
-    // --- Implementation classloader isolation helpers ---
-    private fun buildIsolatedImplClassLoader(): URLClassLoader {
+
+    private fun getIsolatedClassLoader(): URLClassLoader {
         val urls = getImplClasspathUrls()
         val parent = SharedApiClassesClassLoader()
         return URLClassLoader(urls, parent)
     }
-    
+
     private fun getImplClasspathUrls(): Array<URL> {
         val prop = System.getProperty("compiler.impl.classpath")?.takeIf { it.isNotBlank() }
-        val candidates: List<String> = prop?.split(java.io.File.pathSeparator)
+        val candidates: List<String> = prop?.split(File.pathSeparator)
             ?: // Fallback: scan current process classpath for impl/compat jars
-            System.getProperty("java.class.path").orEmpty().split(java.io.File.pathSeparator)
+            System.getProperty("java.class.path").orEmpty().split(File.pathSeparator)
                 .filter { path ->
                     val name = Path.of(path).name
                     name.contains("kotlin-build-tools-impl") || name.contains("kotlin-build-tools-compat")
@@ -187,48 +154,6 @@ class ToolchainManager {
                     args[JvmCompilerArguments.X_ADD_MODULES] = arrayOf("ALL-MODULE-PATH")
                 }
             }
-        }
-    }
-
-    /**
-     * Configures Java source roots and compiles Java files if present.
-     * 
-     * @param args The compiler arguments builder to configure
-     * @param workspace The workspace containing source files
-     */
-    private fun configureJavaSourceRoots(args: JvmCompilerArguments.Builder, workspace: Path) {
-        args[JvmCompilerArguments.X_JAVA_SOURCE_ROOTS] = arrayOf(workspace.toString())
-
-        // Proactively compile any Java sources in the workspace into the conventional out directory
-        // used by tests (workspace/out), to ensure Java classes are present alongside Kotlin output.
-        try {
-            val javaFiles = Files.walk(workspace)
-                .filter { it.isRegularFile() && it.extension.equals("java", ignoreCase = true) }
-                .toList()
-            if (javaFiles.isNotEmpty()) {
-                compileJavaFiles(javaFiles, workspace)
-            }
-        } catch (_: Throwable) {
-            // If Java compiler is unavailable or fails, ignore; Kotlin compilation may still succeed
-        }
-    }
-    
-    /**
-     * Compiles Java files using the system Java compiler.
-     * 
-     * @param javaFiles List of Java files to compile
-     * @param workspace The workspace containing the files
-     */
-    private fun compileJavaFiles(javaFiles: List<Path>, workspace: Path) {
-        val outDir = workspace.resolve("out").createDirectories()
-        val compiler = javax.tools.ToolProvider.getSystemJavaCompiler()
-        if (compiler != null) {
-            val options = mutableListOf("-d", outDir.absolutePathString())
-            val fileManager = compiler.getStandardFileManager(null, null, null)
-            val compilationUnits = fileManager.getJavaFileObjectsFromPaths(javaFiles)
-            val task = compiler.getTask(null, fileManager, null, options, null, compilationUnits)
-            task?.call()
-            fileManager.close()
         }
     }
 }

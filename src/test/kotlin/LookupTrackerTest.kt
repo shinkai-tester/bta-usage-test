@@ -1,19 +1,22 @@
+import support.ExecutionPolicyArgumentProvider
+import support.TestBase
+import org.jetbrains.kotlin.buildtools.api.ExecutionPolicy
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
+import org.jetbrains.kotlin.buildtools.api.KotlinToolchains
 import org.jetbrains.kotlin.buildtools.api.jvm.operations.JvmCompilationOperation
 import org.jetbrains.kotlin.buildtools.api.trackers.CompilerLookupTracker
 import org.junit.jupiter.api.DisplayName
-import org.junit.jupiter.api.Test
-import kotlin.io.path.createDirectories
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ArgumentsSource
+import utils.CompilationTestUtils
+import utils.IncrementalCompilationUtils
 import kotlin.test.assertTrue
 
 /**
  * Tests for the Lookup Tracker functionality in the Build Tools API.
- * 
- * Each test verifies a different type of lookup with a different execution strategy:
- * - Function call lookups with incremental and daemon
- * - Class reference lookups with incremental and in-process
- * - Extension function lookups with non-incremental and daemon
- * - Property access lookups with non-incremental and in-process
+ *
+ * Each test verifies a different type of lookup (function call, class reference, extension function, property access)
+ * and uses parameterized tests to ensure lookup tracking works consistently across execution policies.
  */
 @OptIn(ExperimentalBuildToolsApi::class)
 class LookupTrackerTest : TestBase() {
@@ -45,15 +48,16 @@ class LookupTrackerTest : TestBase() {
         }
     }
 
-    @Test
-    @DisplayName("Function call lookups with incremental + daemon")
-    fun functionCallLookupsIncrementalDaemon() {
+    @ParameterizedTest(name = "{0}: {displayName}")
+    @ArgumentsSource(ExecutionPolicyArgumentProvider::class)
+    @DisplayName("Function call lookups with incremental compilation")
+    fun functionCallLookupsIncremental(execution: Pair<KotlinToolchains, ExecutionPolicy>) {
+        val (toolchain, policy) = execution
         val setup = createTestSetup()
-        val icDir = setup.workspace.resolve("ic").createDirectories()
 
         val utilsSource = framework.createKotlinSource(setup.workspace, "StringUtils.kt", """
             package com.example.utils
-            
+
             fun formatDate(timestamp: Long): String = timestamp.toString()
             fun formatNumber(value: Int): String = value.toString()
         """)
@@ -61,7 +65,7 @@ class LookupTrackerTest : TestBase() {
         val serviceSource = framework.createKotlinSource(setup.workspace, "MyService.kt", """
             package com.example.service
             import com.example.utils.formatDate
-            
+
             class MyService {
                 fun process(ts: Long): String = formatDate(ts)
             }
@@ -70,15 +74,13 @@ class LookupTrackerTest : TestBase() {
         val recordedLookups = mutableListOf<RecordedLookup>()
         val lookupTracker = createLookupTracker(recordedLookups)
 
-        val toolchain = framework.loadToolchain()
         val sources = listOf(utilsSource, serviceSource)
-        
-        val operation = IncrementalCompilationUtils.newIncrementalJvmOp(
-            toolchain, sources, setup.outputDirectory, icDir, setup.workspace, framework, lookupTracker
+
+        val operation = IncrementalCompilationUtils.createIncrementalJvmOperation(
+            toolchain, sources, setup.outputDirectory, setup.icDirectory, setup.workspace, framework, lookupTracker
         )
 
-        val daemonPolicy = framework.createDaemonExecutionPolicy(toolchain)
-        val result = CompilationTestUtils.runCompile(toolchain, operation, daemonPolicy)
+        val result = CompilationTestUtils.runCompile(toolchain, operation, policy)
 
         assertCompilationSuccessful(result)
         assertTrue(recordedLookups.isNotEmpty(), "Lookup tracker should record lookups")
@@ -97,22 +99,23 @@ class LookupTrackerTest : TestBase() {
         }
     }
 
-    @Test
-    @DisplayName("Class reference lookups with incremental + in-process")
-    fun classReferenceLookupsIncrementalInProcess() {
+    @ParameterizedTest(name = "{0}: {displayName}")
+    @ArgumentsSource(ExecutionPolicyArgumentProvider::class)
+    @DisplayName("Class reference lookups with incremental compilation")
+    fun classReferenceLookupsIncremental(execution: Pair<KotlinToolchains, ExecutionPolicy>) {
+        val (toolchain, policy) = execution
         val setup = createTestSetup()
-        val icDir = setup.workspace.resolve("ic").createDirectories()
 
         val modelSource = framework.createKotlinSource(setup.workspace, "User.kt", """
             package com.example.model
-            
+
             data class User(val id: Int, val name: String)
         """)
 
         val repoSource = framework.createKotlinSource(setup.workspace, "UserRepository.kt", """
             package com.example.repository
             import com.example.model.User
-            
+
             class UserRepository {
                 fun findById(id: Int): User? = null
                 fun save(user: User): Unit = Unit
@@ -122,15 +125,13 @@ class LookupTrackerTest : TestBase() {
         val recordedLookups = mutableListOf<RecordedLookup>()
         val lookupTracker = createLookupTracker(recordedLookups)
 
-        val toolchain = framework.loadToolchain()
         val sources = listOf(modelSource, repoSource)
-        
-        val operation = IncrementalCompilationUtils.newIncrementalJvmOp(
-            toolchain, sources, setup.outputDirectory, icDir, setup.workspace, framework, lookupTracker
+
+        val operation = IncrementalCompilationUtils.createIncrementalJvmOperation(
+            toolchain, sources, setup.outputDirectory, setup.icDirectory, setup.workspace, framework, lookupTracker
         )
 
-        val inProcessPolicy = toolchain.createInProcessExecutionPolicy()
-        val result = CompilationTestUtils.runCompile(toolchain, operation, inProcessPolicy)
+        val result = CompilationTestUtils.runCompile(toolchain, operation, policy)
 
         assertCompilationSuccessful(result)
         assertTrue(recordedLookups.isNotEmpty(), "Lookup tracker should record lookups")
@@ -149,22 +150,24 @@ class LookupTrackerTest : TestBase() {
         }
     }
 
-    @Test
-    @DisplayName("Extension function lookups with non-incremental + daemon")
-    fun extensionFunctionLookupsNonIncrementalDaemon() {
+    @ParameterizedTest(name = "{0}: {displayName}")
+    @ArgumentsSource(ExecutionPolicyArgumentProvider::class)
+    @DisplayName("Extension function lookups with non-incremental compilation")
+    fun extensionFunctionLookupsNonIncremental(execution: Pair<KotlinToolchains, ExecutionPolicy>) {
+        val (toolchain, policy) = execution
         val setup = createTestSetup()
 
         val extensionsSource = framework.createKotlinSource(setup.workspace, "StringExtensions.kt", """
             package com.example.extensions
-            
-            fun String.toTitleCase(): String = 
+
+            fun String.toTitleCase(): String =
                 this.split(" ").joinToString(" ") { it.capitalize() }
         """)
 
         val usageSource = framework.createKotlinSource(setup.workspace, "TextProcessor.kt", """
             package com.example.processor
             import com.example.extensions.toTitleCase
-            
+
             class TextProcessor {
                 fun process(text: String): String = text.toTitleCase()
             }
@@ -173,20 +176,17 @@ class LookupTrackerTest : TestBase() {
         val recordedLookups = mutableListOf<RecordedLookup>()
         val lookupTracker = createLookupTracker(recordedLookups)
 
-        val toolchain = framework.loadToolchain()
-        val baseOperation = CompilationTestUtils.newJvmOp(
+        val baseOperation = framework.createJvmCompilationOperation(
             toolchain,
             listOf(extensionsSource, usageSource),
-            setup.outputDirectory,
-            framework
+            setup.outputDirectory
         )
 
         val opBuilder = baseOperation.toBuilder()
         opBuilder[JvmCompilationOperation.LOOKUP_TRACKER] = lookupTracker
         val operation = opBuilder.build()
 
-        val daemonPolicy = framework.createDaemonExecutionPolicy(toolchain)
-        val result = CompilationTestUtils.runCompile(toolchain, operation, daemonPolicy)
+        val result = CompilationTestUtils.runCompile(toolchain, operation, policy)
 
         assertCompilationSuccessful(result)
         assertTrue(recordedLookups.isNotEmpty(), "Lookup tracker should record lookups")
@@ -204,14 +204,16 @@ class LookupTrackerTest : TestBase() {
         }
     }
 
-    @Test
-    @DisplayName("Property access lookups with non-incremental + in-process")
-    fun propertyAccessLookupsNonIncrementalInProcess() {
+    @ParameterizedTest(name = "{0}: {displayName}")
+    @ArgumentsSource(ExecutionPolicyArgumentProvider::class)
+    @DisplayName("Property access lookups with non-incremental compilation")
+    fun propertyAccessLookupsNonIncremental(execution: Pair<KotlinToolchains, ExecutionPolicy>) {
+        val (toolchain, policy) = execution
         val setup = createTestSetup()
 
         val configSource = framework.createKotlinSource(setup.workspace, "AppConfig.kt", """
             package com.example.config
-            
+
             object AppConfig {
                 val appName: String = "MyApp"
                 val version: Int = 1
@@ -222,7 +224,7 @@ class LookupTrackerTest : TestBase() {
         val usageSource = framework.createKotlinSource(setup.workspace, "ConfigReader.kt", """
             package com.example.reader
             import com.example.config.AppConfig
-            
+
             class ConfigReader {
                 fun getAppInfo(): String = AppConfig.appName + " v" + AppConfig.version
                 fun isDebug(): Boolean = AppConfig.debugMode
@@ -232,20 +234,17 @@ class LookupTrackerTest : TestBase() {
         val recordedLookups = mutableListOf<RecordedLookup>()
         val lookupTracker = createLookupTracker(recordedLookups)
 
-        val toolchain = framework.loadToolchain()
-        val baseOperation = CompilationTestUtils.newJvmOp(
+        val baseOperation = framework.createJvmCompilationOperation(
             toolchain,
             listOf(configSource, usageSource),
-            setup.outputDirectory,
-            framework
+            setup.outputDirectory
         )
 
         val opBuilder = baseOperation.toBuilder()
         opBuilder[JvmCompilationOperation.LOOKUP_TRACKER] = lookupTracker
         val operation = opBuilder.build()
 
-        val inProcessPolicy = toolchain.createInProcessExecutionPolicy()
-        val result = CompilationTestUtils.runCompile(toolchain, operation, inProcessPolicy)
+        val result = CompilationTestUtils.runCompile(toolchain, operation, policy)
 
         assertCompilationSuccessful(result)
         assertTrue(recordedLookups.isNotEmpty(), "Lookup tracker should record lookups")

@@ -1,3 +1,6 @@
+package utils
+
+import BtaTestFacade
 import org.jetbrains.kotlin.buildtools.api.*
 import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain
 import org.jetbrains.kotlin.buildtools.api.jvm.JvmSnapshotBasedIncrementalCompilationConfiguration
@@ -13,33 +16,43 @@ import java.nio.file.Path
 object IncrementalCompilationUtils {
     
     /**
-     * Configures incremental compilation on a JvmCompilationOperation.Builder with inline configuration.
-     * 
+     * Configures incremental compilation on a JvmCompilationOperation.Builder with standard test settings.
+     *
+     * Sets up IC with:
+     * - KEEP_IC_CACHES_IN_MEMORY = true
+     * - OUTPUT_DIRS = {outDir, icDir}
+     * - MODULE_BUILD_DIR = workspace
+     * - ROOT_PROJECT_DIR = workspace
+     *
      * @param opBuilder The JVM compilation operation builder to configure
-     * @param workingDir The working directory for incremental compilation
-     * @param changes The source changes to apply
-     * @param shrunkSnapshot Path to the shrunk classpath snapshot file
-     * @param dependencySnapshots List of dependency snapshot files
-     * @param configure Lambda to configure IC options on the builder
+     * @param icDir The directory for incremental compilation caches
+     * @param outDir The output directory for compiled classes
+     * @param workspace The workspace/module directory
+     * @param changes The source changes to apply (defaults to ToBeCalculated)
+     * @param dependencySnapshots List of dependency snapshot files (defaults to empty)
      */
     @JvmStatic
     fun configureIcOnBuilder(
         opBuilder: JvmCompilationOperation.Builder,
-        workingDir: Path,
-        changes: SourcesChanges,
-        shrunkSnapshot: Path,
-        dependencySnapshots: List<Path> = emptyList(),
-        configure: (JvmSnapshotBasedIncrementalCompilationConfiguration.Builder) -> Unit = {}
+        icDir: Path,
+        outDir: Path,
+        workspace: Path,
+        changes: SourcesChanges = SourcesChanges.ToBeCalculated,
+        dependencySnapshots: List<Path> = emptyList()
     ) {
         val icBuilder = opBuilder.snapshotBasedIcConfigurationBuilder(
-            workingDir,
+            icDir,
             changes,
-            dependencySnapshots,
-            shrunkSnapshot
+            dependencySnapshots
         )
-        configure(icBuilder)
-        val icConfig = icBuilder.build()
-        opBuilder[JvmCompilationOperation.INCREMENTAL_COMPILATION] = icConfig
+
+        // Configure standard IC settings for tests
+        icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.KEEP_IC_CACHES_IN_MEMORY] = true
+        icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.OUTPUT_DIRS] = setOf(outDir, icDir)
+        icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.MODULE_BUILD_DIR] = workspace
+        icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.ROOT_PROJECT_DIR] = workspace
+
+        opBuilder[JvmCompilationOperation.INCREMENTAL_COMPILATION] = icBuilder.build()
     }
     
     /**
@@ -56,38 +69,22 @@ object IncrementalCompilationUtils {
      * @return Configured JvmCompilationOperation with incremental compilation
      */
     @JvmStatic
-    fun newIncrementalJvmOp(
+    fun createIncrementalJvmOperation(
         toolchain: KotlinToolchains,
         sources: List<Path>,
         outDir: Path,
         icDir: Path,
         workspace: Path,
-        framework: BtaTestFramework,
+        framework: BtaTestFacade,
         lookupTracker: CompilerLookupTracker? = null
     ): JvmCompilationOperation {
         val jvmToolchain = toolchain.getToolchain(JvmPlatformToolchain::class.java)
         val opBuilder = jvmToolchain.jvmCompilationOperationBuilder(sources, outDir)
 
-        // Configure basic compiler arguments
         framework.configureBasicCompilerArguments(opBuilder.compilerArguments, "test-module")
 
-        // Configure incremental compilation
-        configureIcOnBuilder(
-            opBuilder,
-            icDir,
-            SourcesChanges.ToBeCalculated,
-            icDir.resolve("shrunk.bin"),
-            emptyList()
-        ) { icBuilder ->
-            icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.ASSURED_NO_CLASSPATH_SNAPSHOT_CHANGES] = true
-            icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.KEEP_IC_CACHES_IN_MEMORY] = true
-            icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.OUTPUT_DIRS] = setOf(outDir, icDir)
-            icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.PRECISE_JAVA_TRACKING] = true
-            icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.MODULE_BUILD_DIR] = workspace
-            icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.ROOT_PROJECT_DIR] = workspace
-        }
+        configureIcOnBuilder(opBuilder, icDir, outDir, workspace)
 
-        // Attach the lookup tracker if provided
         if (lookupTracker != null) {
             opBuilder[JvmCompilationOperation.LOOKUP_TRACKER] = lookupTracker
         }
