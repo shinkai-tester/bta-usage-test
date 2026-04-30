@@ -1,13 +1,13 @@
-import support.ExecutionPolicyArgumentProvider
-import support.TestBase
+import org.jetbrains.kotlin.buildtools.api.BaseCompilationOperation
 import org.jetbrains.kotlin.buildtools.api.ExecutionPolicy
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
 import org.jetbrains.kotlin.buildtools.api.KotlinToolchains
-import org.jetbrains.kotlin.buildtools.api.jvm.operations.JvmCompilationOperation
 import org.jetbrains.kotlin.buildtools.api.trackers.CompilerLookupTracker
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ArgumentsSource
+import support.ExecutionPolicyArgumentProvider
+import support.TestBase
 import utils.CompilationTestUtils
 import utils.IncrementalCompilationUtils
 import kotlin.test.assertTrue
@@ -183,7 +183,7 @@ class LookupTrackerTest : TestBase() {
         )
 
         val opBuilder = baseOperation.toBuilder()
-        opBuilder[JvmCompilationOperation.LOOKUP_TRACKER] = lookupTracker
+        opBuilder[BaseCompilationOperation.LOOKUP_TRACKER] = lookupTracker
         val operation = opBuilder.build()
 
         val result = CompilationTestUtils.runCompile(toolchain, operation, policy)
@@ -241,7 +241,7 @@ class LookupTrackerTest : TestBase() {
         )
 
         val opBuilder = baseOperation.toBuilder()
-        opBuilder[JvmCompilationOperation.LOOKUP_TRACKER] = lookupTracker
+        opBuilder[BaseCompilationOperation.LOOKUP_TRACKER] = lookupTracker
         val operation = opBuilder.build()
 
         val result = CompilationTestUtils.runCompile(toolchain, operation, policy)
