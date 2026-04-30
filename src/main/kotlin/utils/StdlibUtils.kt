@@ -1,7 +1,7 @@
 package utils
 
 import java.io.File
-import java.nio.file.Path
+import kotlin.io.path.Path
 import kotlin.io.path.exists
 import kotlin.io.path.name
 
@@ -30,12 +30,12 @@ object StdlibUtils {
             val jarPart = spec.substringAfter("jar:").substringBefore("!")
             val path = jarPart.removePrefix("file:")
             val normalized = normalizeFilePath(path)
-            if (Path.of(normalized).exists()) return normalized
+            if (Path(normalized).exists()) return normalized
         } else if (spec.startsWith("file:")) {
             // Class loaded from an exploded directory. Find the stdlib jar on the classpath.
             val cpEntries = System.getProperty("java.class.path").orEmpty().split(File.pathSeparator)
             val candidate = cpEntries.firstNotNullOfOrNull { entry ->
-                if (entry.contains("kotlin-stdlib") && entry.endsWith(".jar") && Path.of(entry).exists()) entry else null
+                if (entry.contains("kotlin-stdlib") && entry.endsWith(".jar") && Path(entry).exists()) entry else null
             }
             if (candidate != null) return candidate
         }
@@ -44,7 +44,7 @@ object StdlibUtils {
         val cpEntries = System.getProperty("java.class.path").orEmpty().split(File.pathSeparator)
         val regex = Regex("""kotlin-stdlib(-jdk[0-9]+)?(-\d[\w.+-]*)?\.jar$""")
         val match = cpEntries.firstNotNullOfOrNull { entry ->
-            if (entry.isNotBlank() && regex.containsMatchIn(Path.of(entry).name) && Path.of(entry).exists()) entry else null
+            if (entry.isNotBlank() && regex.containsMatchIn(Path(entry).name) && Path(entry).exists()) entry else null
         }
         if (match != null) return match
 

@@ -33,13 +33,11 @@ class CompilerArgumentsLifecycleTest : TestBase() {
         """
         )
 
-        val op = framework.createJvmCompilationOperation(toolchain, listOf(src), setup.outputDirectory)
-        val args = op.compilerArguments
+        val builder = framework.createJvmCompilationOperationBuilder(toolchain, listOf(src), setup.outputDirectory)
+        builder.compilerArguments[CommonCompilerArguments.X_NO_INLINE] = true
+        builder.compilerArguments[JvmCompilerArguments.X_DEBUG] = true
 
-        args[CommonCompilerArguments.X_NO_INLINE] = true
-        args[JvmCompilerArguments.X_DEBUG] = true
-
-        val result = CompilationTestUtils.runCompile(toolchain, op, daemonPolicy)
+        val result = CompilationTestUtils.runCompile(toolchain, builder.build(), daemonPolicy)
 
         assertCompilationSuccessful(result, "Experimental argument with opt-in should work")
     }
@@ -55,15 +53,13 @@ class CompilerArgumentsLifecycleTest : TestBase() {
         """
         )
 
-        val op = framework.createJvmCompilationOperation(toolchain, listOf(src), setup.outputDirectory)
-        val args = op.compilerArguments
-
-        args[JvmCompilerArguments.X_USE_K2_KAPT] = true
+        val builder = framework.createJvmCompilationOperationBuilder(toolchain, listOf(src), setup.outputDirectory)
+        builder.compilerArguments[JvmCompilerArguments.X_USE_K2_KAPT] = true
 
         val logger = TestLogger(true)
         var thrown: Throwable? = null
         val result = try {
-            CompilationTestUtils.runCompile(toolchain, op, daemonPolicy, logger)
+            CompilationTestUtils.runCompile(toolchain, builder.build(), daemonPolicy, logger)
         } catch (t: Throwable) {
             thrown = t
             null
@@ -109,12 +105,10 @@ class CompilerArgumentsLifecycleTest : TestBase() {
         """
         )
 
-        val op = framework.createJvmCompilationOperation(toolchain, listOf(src), setup.outputDirectory)
-        val args = op.compilerArguments
+        val builder = framework.createJvmCompilationOperationBuilder(toolchain, listOf(src), setup.outputDirectory)
+        builder.compilerArguments[JvmCompilerArguments.X_JVM_DEFAULT] = "all"
 
-        args[JvmCompilerArguments.X_JVM_DEFAULT] = "all"
-
-        val result = CompilationTestUtils.runCompile(toolchain, op, daemonPolicy, logger)
+        val result = CompilationTestUtils.runCompile(toolchain, builder.build(), daemonPolicy, logger)
 
         assertCompilationSuccessful(result, "Deprecated argument should still work at runtime with opt-in")
     }
@@ -127,10 +121,10 @@ class CompilerArgumentsLifecycleTest : TestBase() {
         fun foo() = 42
     """)
 
-        val op = framework.createJvmCompilationOperation(toolchain, listOf(src), setup.outputDirectory)
+        val builder = framework.createJvmCompilationOperationBuilder(toolchain, listOf(src), setup.outputDirectory)
 
         val ex = Assertions.assertThrows(CompilerArgumentsParseException::class.java) {
-            op.compilerArguments.applyArgumentStrings(listOf("-jvm-target"))
+            builder.compilerArguments.applyArgumentStrings(listOf("-jvm-target"))
         }
         println("[testApplyArgumentMissingValue] Caught expected CompilerArgumentsParseException: ${ex.message}")
     }
@@ -144,8 +138,8 @@ class CompilerArgumentsLifecycleTest : TestBase() {
     """
         )
 
-        val op = framework.createJvmCompilationOperation(toolchain, listOf(src), setup.outputDirectory)
-        val args = op.compilerArguments
+        val builder = framework.createJvmCompilationOperationBuilder(toolchain, listOf(src), setup.outputDirectory)
+        val args = builder.compilerArguments
 
         val future = JvmCompilerArguments.JvmCompilerArgument<Boolean>(
             "X_FAKE_FUTURE_FLAG",

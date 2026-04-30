@@ -8,6 +8,7 @@ import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain
 import utils.CompilationTestUtils
 import utils.StdlibUtils
 import java.nio.file.Files
+import kotlin.io.path.Path
 import kotlin.io.path.createDirectories
 import kotlin.io.path.isRegularFile
 import kotlin.io.path.relativeTo
@@ -47,7 +48,7 @@ fun main(vararg implClasspath: String) {
     val args = opBuilder.compilerArguments
     args[JvmCompilerArguments.NO_STDLIB] = true
     args[JvmCompilerArguments.NO_REFLECT] = true
-    args[JvmCompilerArguments.CLASSPATH] = StdlibUtils.findStdlibJar()
+    args[JvmCompilerArguments.CLASSPATH] = listOf(Path(StdlibUtils.findStdlibJar()))
     args[JvmCompilerArguments.JVM_TARGET] = JvmTarget.JVM_11
     args[JvmCompilerArguments.MODULE_NAME] = "bta.main.example"
 

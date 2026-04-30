@@ -2,11 +2,14 @@ package utils
 
 import BtaTestFacade
 import org.jetbrains.kotlin.buildtools.api.*
+import org.jetbrains.kotlin.buildtools.api.jvm.ClassSnapshotGranularity
 import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain
-import org.jetbrains.kotlin.buildtools.api.jvm.JvmSnapshotBasedIncrementalCompilationConfiguration
+import org.jetbrains.kotlin.buildtools.api.jvm.ClasspathEntrySnapshot
+import org.jetbrains.kotlin.buildtools.api.jvm.operations.JvmClasspathSnapshottingOperation
 import org.jetbrains.kotlin.buildtools.api.jvm.operations.JvmCompilationOperation
 import org.jetbrains.kotlin.buildtools.api.trackers.CompilerLookupTracker
 import java.nio.file.Path
+import kotlin.io.path.createDirectories
 
 /**
  * Utilities for incremental compilation testing, providing helper methods for IC configuration.
@@ -14,7 +17,7 @@ import java.nio.file.Path
  */
 @OptIn(ExperimentalBuildToolsApi::class)
 object IncrementalCompilationUtils {
-    
+
     /**
      * Configures incremental compilation on a JvmCompilationOperation.Builder with standard test settings.
      *
@@ -47,18 +50,18 @@ object IncrementalCompilationUtils {
         )
 
         // Configure standard IC settings for tests
-        icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.KEEP_IC_CACHES_IN_MEMORY] = true
-        icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.OUTPUT_DIRS] = setOf(outDir, icDir)
-        icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.MODULE_BUILD_DIR] = workspace
-        icBuilder[JvmSnapshotBasedIncrementalCompilationConfiguration.ROOT_PROJECT_DIR] = workspace
+        icBuilder[BaseIncrementalCompilationConfiguration.KEEP_IC_CACHES_IN_MEMORY] = true
+        icBuilder[BaseIncrementalCompilationConfiguration.OUTPUT_DIRS] = setOf(outDir, icDir)
+        icBuilder[BaseIncrementalCompilationConfiguration.MODULE_BUILD_DIR] = workspace
+        icBuilder[BaseIncrementalCompilationConfiguration.ROOT_PROJECT_DIR] = workspace
 
         opBuilder[JvmCompilationOperation.INCREMENTAL_COMPILATION] = icBuilder.build()
     }
-    
+
     /**
      * Creates a new JVM compilation operation with incremental compilation configured.
      * Optionally attaches a lookup tracker.
-     * 
+     *
      * @param toolchain The Kotlin toolchain to use for compilation
      * @param sources List of source files to compile
      * @param outDir Output directory for compiled classes
@@ -66,6 +69,7 @@ object IncrementalCompilationUtils {
      * @param workspace The workspace/module directory
      * @param framework The test framework instance for configuration
      * @param lookupTracker Optional lookup tracker to attach to the operation
+     * @param dependencySnapshots List of dependency snapshot file paths for classpath change detection
      * @return Configured JvmCompilationOperation with incremental compilation
      */
     @JvmStatic
@@ -76,19 +80,58 @@ object IncrementalCompilationUtils {
         icDir: Path,
         workspace: Path,
         framework: BtaTestFacade,
-        lookupTracker: CompilerLookupTracker? = null
+        lookupTracker: CompilerLookupTracker? = null,
+        dependencySnapshots: List<Path> = emptyList()
     ): JvmCompilationOperation {
         val jvmToolchain = toolchain.getToolchain(JvmPlatformToolchain::class.java)
         val opBuilder = jvmToolchain.jvmCompilationOperationBuilder(sources, outDir)
 
         framework.configureBasicCompilerArguments(opBuilder.compilerArguments, "test-module")
 
-        configureIcOnBuilder(opBuilder, icDir, outDir, workspace)
+        configureIcOnBuilder(opBuilder, icDir, outDir, workspace, dependencySnapshots = dependencySnapshots)
 
         if (lookupTracker != null) {
-            opBuilder[JvmCompilationOperation.LOOKUP_TRACKER] = lookupTracker
+            opBuilder[BaseCompilationOperation.LOOKUP_TRACKER] = lookupTracker
         }
 
         return opBuilder.build()
+    }
+
+    /**
+     * Generates a classpath snapshot for a given classpath entry (e.g., a compiled module's output directory
+     * or a JAR dependency) and saves it to disk.
+     *
+     * This follows the pattern from the Kotlin source of truth: use [JvmClasspathSnapshottingOperation]
+     * to compute a snapshot, then persist it via [ClasspathEntrySnapshot.saveSnapshot].
+     *
+     * @param toolchain The Kotlin toolchain to use
+     * @param session The build session for executing the snapshotting operation
+     * @param classpathEntry Path to the classpath entry to snapshot (directory or JAR)
+     * @param snapshotOutputDir Directory where the snapshot file will be saved
+     * @param granularity Snapshot granularity (defaults to CLASS_MEMBER_LEVEL for fine-grained tracking)
+     * @param parseInlinedLocalClasses Whether to enable extended snapshotting for inline methods
+     * @return Path to the saved snapshot file
+     */
+    @JvmStatic
+    fun generateClasspathSnapshot(
+        toolchain: KotlinToolchains,
+        session: KotlinToolchains.BuildSession,
+        classpathEntry: Path,
+        snapshotOutputDir: Path,
+        granularity: ClassSnapshotGranularity = ClassSnapshotGranularity.CLASS_MEMBER_LEVEL,
+        parseInlinedLocalClasses: Boolean = false
+    ): Path {
+        val jvmToolchain = toolchain.getToolchain(JvmPlatformToolchain::class.java)
+        val snapshotBuilder = jvmToolchain.classpathSnapshottingOperationBuilder(classpathEntry)
+        snapshotBuilder[JvmClasspathSnapshottingOperation.GRANULARITY] = granularity
+        snapshotBuilder[JvmClasspathSnapshottingOperation.PARSE_INLINED_LOCAL_CLASSES] = parseInlinedLocalClasses
+
+        val snapshotResult = session.executeOperation(snapshotBuilder.build())
+
+        snapshotOutputDir.createDirectories()
+        val snapshotFile = snapshotOutputDir.resolve("dep-${classpathEntry.fileName}.snapshot")
+        snapshotResult.saveSnapshot(snapshotFile)
+
+        return snapshotFile
     }
 }

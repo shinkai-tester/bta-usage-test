@@ -15,6 +15,7 @@ object CompilationTestUtils {
 
     /**
      * Executes a compilation operation with a specified execution policy and returns the result.
+     * Creates a new build session for each call — suitable for single-shot compilations.
      *
      * @param toolchain The Kotlin toolchain to use for compilation
      * @param op The compilation operation to execute
@@ -33,6 +34,28 @@ object CompilationTestUtils {
         return toolchain.createBuildSession().use { session ->
             session.executeOperation(op, executionPolicy, effectiveLogger)
         }
+    }
+
+    /**
+     * Executes a compilation operation within an existing build session.
+     * This is essential for incremental compilation where the session retains IC caches
+     * between compilation rounds.
+     *
+     * @param session The existing build session to use
+     * @param op The compilation operation to execute
+     * @param executionPolicy The execution policy to use for compilation
+     * @param logger Optional logger for compilation messages (defaults to framework.TestLogger)
+     * @return CompilationResult indicating success or failure
+     */
+    @JvmStatic
+    fun runCompile(
+        session: KotlinToolchains.BuildSession,
+        op: JvmCompilationOperation,
+        executionPolicy: ExecutionPolicy,
+        logger: KotlinLogger? = null
+    ): CompilationResult {
+        val effectiveLogger = logger ?: TestLogger(false)
+        return session.executeOperation(op, executionPolicy, effectiveLogger)
     }
     
     /**

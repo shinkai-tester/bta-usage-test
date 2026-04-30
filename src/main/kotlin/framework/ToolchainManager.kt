@@ -12,7 +12,7 @@ import java.io.File
 import java.net.URL
 import java.net.URLClassLoader
 import java.nio.file.Path
-import kotlin.io.path.absolutePathString
+import kotlin.io.path.Path
 import kotlin.io.path.exists
 import kotlin.io.path.isDirectory
 import kotlin.io.path.name
@@ -45,7 +45,7 @@ class ToolchainManager {
     fun loadToolchainWithClasspath(classpath: String): KotlinToolchains {
         val urls = classpath.split(File.pathSeparator)
             .filter { it.isNotBlank() }
-            .map { Path.of(it).toUri().toURL() }
+            .map { Path(it).toUri().toURL() }
             .toTypedArray()
         return KotlinToolchains.loadImplementation(URLClassLoader(urls, SharedApiClassesClassLoader()))
     }
@@ -61,20 +61,23 @@ class ToolchainManager {
      * @param outDir Output directory for compiled classes
      * @return Configured JvmCompilationOperation ready to execute
      */
+    fun setupJvmCompilationOperationBuilder(
+        toolchain: KotlinToolchains,
+        sources: List<Path>,
+        outDir: Path
+    ): JvmCompilationOperation.Builder {
+        val jvmToolchain = toolchain.getToolchain(JvmPlatformToolchain::class.java)
+        val builder = jvmToolchain.jvmCompilationOperationBuilder(sources, outDir)
+        configureBasicCompilerArguments(builder.compilerArguments, "test-module")
+        configureJdkSettings(builder.compilerArguments)
+        return builder
+    }
+
     fun setupJvmCompilationOperation(
         toolchain: KotlinToolchains,
         sources: List<Path>,
         outDir: Path
-    ): JvmCompilationOperation {
-        val jvmToolchain = toolchain.getToolchain(JvmPlatformToolchain::class.java)
-        val builder = jvmToolchain.jvmCompilationOperationBuilder(sources, outDir)
-        val args = builder.compilerArguments
-
-        configureBasicCompilerArguments(args, "test-module")
-        configureJdkSettings(args)
-
-        return builder.build()
-    }
+    ): JvmCompilationOperation = setupJvmCompilationOperationBuilder(toolchain, sources, outDir).build()
 
     /**
      * Locates the kotlin-stdlib JAR file on the classpath.
@@ -100,10 +103,10 @@ class ToolchainManager {
         args[JvmCompilerArguments.NO_REFLECT] = true
 
         val stdlib = findStdlibJar()
-        val classpath = listOfNotNull(stdlib)
-            .filter { it.isNotBlank() && Path.of(it).exists() }
-            .joinToString(File.pathSeparator)
-        args[JvmCompilerArguments.CLASSPATH] = classpath
+        val classpathPaths = listOfNotNull(stdlib)
+            .filter { it.isNotBlank() && Path(it).exists() }
+            .map { Path(it) }
+        args[JvmCompilerArguments.CLASSPATH] = classpathPaths
 
         args[JvmCompilerArguments.MODULE_NAME] = moduleName
     }
@@ -120,12 +123,12 @@ class ToolchainManager {
             ?: // Fallback: scan current process classpath for impl/compat jars
             System.getProperty("java.class.path").orEmpty().split(File.pathSeparator)
                 .filter { path ->
-                    val name = Path.of(path).name
+                    val name = Path(path).name
                     name.contains("kotlin-build-tools-impl") || name.contains("kotlin-build-tools-compat")
                 }
         val urls = candidates
             .filter { it.isNotBlank() }
-            .mapNotNull { runCatching { Path.of(it).toUri().toURL() }.getOrNull() }
+            .mapNotNull { runCatching { Path(it).toUri().toURL() }.getOrNull() }
             .toTypedArray()
         if (urls.isEmpty()) {
             throw IllegalStateException(
@@ -143,15 +146,15 @@ class ToolchainManager {
     private fun configureJdkSettings(args: JvmCompilerArguments.Builder) {
         val javaHomeProp = System.getProperty("java.home")
         if (javaHomeProp != null) {
-            val javaHome = Path.of(javaHomeProp)
+            val javaHome = Path(javaHomeProp)
             val isJre = javaHome.fileName?.toString()?.equals("jre", ignoreCase = true) == true
             val jdkHome = if (isJre) (javaHome.parent ?: javaHome) else javaHome
             if (jdkHome.isDirectory()) {
-                args[JvmCompilerArguments.JDK_HOME] = jdkHome.toString()
+                args[JvmCompilerArguments.JDK_HOME] = jdkHome
                 val jmods = jdkHome.resolve("jmods")
                 if (jmods.isDirectory()) {
-                    args[JvmCompilerArguments.X_MODULE_PATH] = jmods.absolutePathString()
-                    args[JvmCompilerArguments.X_ADD_MODULES] = arrayOf("ALL-MODULE-PATH")
+                    args[JvmCompilerArguments.X_MODULE_PATH] = listOf(jmods)
+                    args[JvmCompilerArguments.X_ADD_MODULES] = listOf("ALL-MODULE-PATH")
                 }
             }
         }

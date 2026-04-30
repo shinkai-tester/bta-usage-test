@@ -85,6 +85,14 @@ class BtaTestFacade {
     ): JvmCompilationOperation {
         return toolchainManager.setupJvmCompilationOperation(toolchain, sources, outDir)
     }
+
+    fun createJvmCompilationOperationBuilder(
+        toolchain: KotlinToolchains,
+        sources: List<Path>,
+        outDir: Path
+    ): JvmCompilationOperation.Builder {
+        return toolchainManager.setupJvmCompilationOperationBuilder(toolchain, sources, outDir)
+    }
     
     
     /**

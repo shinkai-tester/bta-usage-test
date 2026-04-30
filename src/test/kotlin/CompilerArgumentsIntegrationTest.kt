@@ -74,7 +74,7 @@ class CompilerArgumentsIntegrationTest : TestBase() {
         builder.compilerArguments[CommonCompilerArguments.LANGUAGE_VERSION] = KotlinVersion.V2_4
         builder.compilerArguments[CommonCompilerArguments.API_VERSION] = KotlinVersion.V2_4
         builder.compilerArguments[CommonCompilerArguments.PROGRESSIVE] = true
-        builder.compilerArguments[CommonCompilerArguments.OPT_IN] = arrayOf("test.common.MyExperimental")
+        builder.compilerArguments[CommonCompilerArguments.OPT_IN] = listOf("test.common.MyExperimental")
 
         val op = builder.build()
 
@@ -131,7 +131,7 @@ class CompilerArgumentsIntegrationTest : TestBase() {
         val builder = jvmToolchain.jvmCompilationOperationBuilder(listOf(src), setup.outputDirectory)
 
         builder.compilerArguments[JvmCompilerArguments.NO_STDLIB] = true
-        builder.compilerArguments[JvmCompilerArguments.CLASSPATH] = ""
+        builder.compilerArguments[JvmCompilerArguments.CLASSPATH] = emptyList()
         builder.compilerArguments[JvmCompilerArguments.MODULE_NAME] = "test-module"
 
         val op = builder.build()
