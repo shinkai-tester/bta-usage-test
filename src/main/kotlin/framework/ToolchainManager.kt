@@ -2,15 +2,12 @@ package framework
 
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
 import org.jetbrains.kotlin.buildtools.api.KotlinToolchains
-import org.jetbrains.kotlin.buildtools.api.SharedApiClassesClassLoader
 import org.jetbrains.kotlin.buildtools.api.arguments.ExperimentalCompilerArgument
 import org.jetbrains.kotlin.buildtools.api.arguments.JvmCompilerArguments
 import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain
 import org.jetbrains.kotlin.buildtools.api.jvm.operations.JvmCompilationOperation
 import utils.StdlibUtils
 import java.io.File
-import java.net.URL
-import java.net.URLClassLoader
 import java.nio.file.Path
 import kotlin.io.path.Path
 import kotlin.io.path.exists
@@ -32,22 +29,21 @@ class ToolchainManager {
      * @return KotlinToolchains instance
      */
     fun loadToolchain(): KotlinToolchains {
-        return KotlinToolchains.loadImplementation(getIsolatedClassLoader())
+        return KotlinToolchains.loadImplementation(getImplClasspath())
     }
 
     /**
      * Loads the Kotlin toolchain using a custom classpath.
      * This is useful for testing with different compiler versions.
-     * 
+     *
      * @param classpath The classpath string (paths separated by system path separator)
      * @return Configured KotlinToolchains instance
      */
     fun loadToolchainWithClasspath(classpath: String): KotlinToolchains {
-        val urls = classpath.split(File.pathSeparator)
+        val paths = classpath.split(File.pathSeparator)
             .filter { it.isNotBlank() }
-            .map { Path(it).toUri().toURL() }
-            .toTypedArray()
-        return KotlinToolchains.loadImplementation(URLClassLoader(urls, SharedApiClassesClassLoader()))
+            .map { Path(it) }
+        return KotlinToolchains.loadImplementation(paths)
     }
 
     /**
@@ -111,13 +107,7 @@ class ToolchainManager {
         args[JvmCompilerArguments.MODULE_NAME] = moduleName
     }
 
-    private fun getIsolatedClassLoader(): URLClassLoader {
-        val urls = getImplClasspathUrls()
-        val parent = SharedApiClassesClassLoader()
-        return URLClassLoader(urls, parent)
-    }
-
-    private fun getImplClasspathUrls(): Array<URL> {
+    private fun getImplClasspath(): List<Path> {
         val prop = System.getProperty("compiler.impl.classpath")?.takeIf { it.isNotBlank() }
         val candidates: List<String> = prop?.split(File.pathSeparator)
             ?: // Fallback: scan current process classpath for impl/compat jars
@@ -126,16 +116,15 @@ class ToolchainManager {
                     val name = Path(path).name
                     name.contains("kotlin-build-tools-impl") || name.contains("kotlin-build-tools-compat")
                 }
-        val urls = candidates
+        val paths = candidates
             .filter { it.isNotBlank() }
-            .mapNotNull { runCatching { Path(it).toUri().toURL() }.getOrNull() }
-            .toTypedArray()
-        if (urls.isEmpty()) {
+            .mapNotNull { runCatching { Path(it) }.getOrNull() }
+        if (paths.isEmpty()) {
             throw IllegalStateException(
                 "No Kotlin compiler implementation jars found. Pass them as program args or set -Dcompiler.impl.classpath."
             )
         }
-        return urls
+        return paths
     }
 
     /**

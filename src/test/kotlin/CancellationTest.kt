@@ -88,8 +88,8 @@ class CancellationTest : TestBase() {
             }
         """)
 
-        val oldClasspath = System.getProperty("old.compiler.impl.classpath")
-            ?: throw IllegalStateException("old.compiler.impl.classpath system property not set")
+        val oldClasspath = System.getProperty("old.compiler.cancellation.impl.classpath")
+            ?: throw IllegalStateException("old.compiler.cancellation.impl.classpath system property not set")
         val toolchain = framework.loadToolchainWithClasspath(oldClasspath)
         val operation = framework.createJvmCompilationOperation(toolchain, listOf(source), setup.outputDirectory)
 
