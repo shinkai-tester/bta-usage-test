@@ -6,7 +6,7 @@
 
 **`BtaTestFacade.kt`** - main facade providing a unified interface for testing Kotlin compilation operations.
 
-**`Main.kt`** demonstrates programmatic usage of the Build Tools API. Run with `./gradlew run`.
+**`Main.kt`** - self-contained in-process JVM compilation demo using the Build Tools API. Run with `./gradlew run`.
 
 #### `framework`
 - **`ToolchainManager.kt`** - toolchain loading and compiler argument configuration
