@@ -1,10 +1,14 @@
 import support.ExecutionPolicyArgumentProvider
 import support.TestBase
 import framework.TestLogger
+import framework.applyTestDefaults
+import framework.loadToolchain
 import org.jetbrains.kotlin.buildtools.api.ExecutionPolicy
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
 import org.jetbrains.kotlin.buildtools.api.KotlinToolchains
 import org.jetbrains.kotlin.buildtools.api.OperationCancelledException
+import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain.Companion.jvm
+import org.jetbrains.kotlin.buildtools.api.jvm.jvmCompilationOperation
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -29,13 +33,15 @@ class CancellationTest : TestBase() {
     fun cancelNonIncrementalCompilation(execution: Pair<KotlinToolchains, ExecutionPolicy>) {
         val (toolchain, policy) = execution
         val setup = createTestSetup()
-        val source = framework.createKotlinSource(setup.workspace, "SimpleTest.kt", """
+        val source = createKotlinSource(setup.workspace, "SimpleTest.kt", """
             class SimpleTest {
                 fun greet(): String = "Hello!"
             }
         """)
 
-        val operation = framework.createJvmCompilationOperation(toolchain, listOf(source), setup.outputDirectory)
+        val operation = toolchain.jvm.jvmCompilationOperation(listOf(source), setup.outputDirectory) {
+            compilerArguments.applyTestDefaults()
+        }
 
         val exception = assertThrows<OperationCancelledException> {
             toolchain.createBuildSession().use { session ->
@@ -53,7 +59,7 @@ class CancellationTest : TestBase() {
     fun cancelIncrementalCompilation(execution: Pair<KotlinToolchains, ExecutionPolicy>) {
         val (toolchain, policy) = execution
         val setup = createTestSetup()
-        val source = framework.createKotlinSource(setup.workspace, "IncrementalTest.kt", """
+        val source = createKotlinSource(setup.workspace, "IncrementalTest.kt", """
             class IncrementalTest {
                 fun compute(): Int = 42
             }
@@ -64,8 +70,7 @@ class CancellationTest : TestBase() {
             listOf(source),
             setup.outputDirectory,
             setup.icDirectory,
-            setup.workspace,
-            framework
+            setup.workspace
         )
 
         val exception = assertThrows<OperationCancelledException> {
@@ -82,7 +87,7 @@ class CancellationTest : TestBase() {
     @DisplayName("Cancellation not supported with old compiler (pre-2.3.20) throws IllegalStateException")
     fun cancelNotSupportedWithOldCompiler() {
         val setup = createTestSetup()
-        val source = framework.createKotlinSource(setup.workspace, "OldCompilerTest.kt", """
+        val source = createKotlinSource(setup.workspace, "OldCompilerTest.kt", """
             class OldCompilerTest {
                 fun greet(): String = "Hello from old compiler!"
             }
@@ -90,8 +95,10 @@ class CancellationTest : TestBase() {
 
         val oldClasspath = System.getProperty("old.compiler.cancellation.impl.classpath")
             ?: throw IllegalStateException("old.compiler.cancellation.impl.classpath system property not set")
-        val toolchain = framework.loadToolchainWithClasspath(oldClasspath)
-        val operation = framework.createJvmCompilationOperation(toolchain, listOf(source), setup.outputDirectory)
+        val toolchain = loadToolchain(oldClasspath)
+        val operation = toolchain.jvm.jvmCompilationOperation(listOf(source), setup.outputDirectory) {
+            compilerArguments.applyTestDefaults()
+        }
 
         val exception = assertThrows<IllegalStateException> {
             operation.cancel()

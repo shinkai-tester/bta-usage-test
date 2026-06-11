@@ -1,29 +1,30 @@
 package support
 
-import BtaTestFacade
 import org.jetbrains.kotlin.buildtools.api.CompilationResult
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.ConcurrentLinkedQueue
+import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.createDirectories
+import kotlin.io.path.deleteRecursively
+import kotlin.io.path.exists
 import kotlin.io.path.extension
 import kotlin.io.path.isRegularFile
 import kotlin.io.path.name
+import kotlin.io.path.writeText
 import kotlin.test.assertTrue
 
 /**
- * Base class for compilation tests that provides common setup and utility methods.
- * 
- * This class follows the DRY principle by extracting common test functionality
- * and provides a clear structure for compilation tests. It includes:
- * - Common test setup (workspace and output directory creation)
- * - Utility methods for verification
- * - Consistent patterns for test organization
+ * Base class for compilation tests that provides the small amount of state shared across the suite:
+ * - temporary workspace/source creation (with automatic cleanup at JVM shutdown)
+ * - common compilation assertions
+ *
+ * Toolchain loading and compiler-argument configuration live in the [framework] package.
  */
 @OptIn(ExperimentalBuildToolsApi::class)
 abstract class TestBase {
-
-    protected val framework = BtaTestFacade()
 
     /**
      * Represents the setup for a compilation test including workspace, output, and IC directories.
@@ -36,24 +37,35 @@ abstract class TestBase {
 
     /**
      * Creates a standard test setup with workspace, output directory, and IC directory.
-     *
-     * @return CompilationTestSetup containing workspace, output directory, and IC directory paths
      */
     protected fun createTestSetup(): CompilationTestSetup {
-        val workspace = framework.createTempWorkspace()
+        val workspace = createTempWorkspace()
         val outputDirectory = workspace.resolve("out").createDirectories()
         val icDirectory = workspace.resolve("ic").createDirectories()
         return CompilationTestSetup(workspace, outputDirectory, icDirectory)
     }
 
     /**
+     * Creates a temporary workspace directory that is recursively deleted when the JVM exits.
+     */
+    protected fun createTempWorkspace(): Path {
+        ensureShutdownHookInstalled()
+        return Files.createTempDirectory("bta-test").also { createdWorkspaces.add(it) }
+    }
+
+    /**
+     * Creates a Kotlin source file (`content` is trimmed of indentation) inside [workspace].
+     */
+    protected fun createKotlinSource(workspace: Path, fileName: String, content: String): Path {
+        require(fileName.endsWith(".kt")) { "Kotlin source file name must end with .kt, got: $fileName" }
+        return workspace.resolve(fileName).apply { writeText(content.trimIndent()) }
+    }
+
+    /**
      * Verifies that compilation was successful.
-     * 
-     * @param result The compilation result to verify
-     * @param message Optional custom message for assertion failure
      */
     protected fun assertCompilationSuccessful(
-        result: CompilationResult, 
+        result: CompilationResult,
         message: String = "Expected compilation to succeed"
     ) {
         kotlin.test.assertEquals(CompilationResult.COMPILATION_SUCCESS, result, message)
@@ -61,12 +73,9 @@ abstract class TestBase {
 
     /**
      * Verifies that compilation failed with an error.
-     * 
-     * @param result The compilation result to verify
-     * @param message Optional custom message for assertion failure
      */
     protected fun assertCompilationFailed(
-        result: CompilationResult, 
+        result: CompilationResult,
         message: String = "Expected compilation to fail"
     ) {
         kotlin.test.assertEquals(CompilationResult.COMPILATION_ERROR, result, message)
@@ -74,12 +83,9 @@ abstract class TestBase {
 
     /**
      * Verifies that compilation failed with an internal error.
-     * 
-     * @param result The compilation result to verify
-     * @param message Optional custom message for assertion failure
      */
     protected fun assertCompilationInternalError(
-        result: CompilationResult, 
+        result: CompilationResult,
         message: String = "Expected compilation to fail with internal error"
     ) {
         kotlin.test.assertEquals(CompilationResult.COMPILER_INTERNAL_ERROR, result, message)
@@ -87,13 +93,10 @@ abstract class TestBase {
 
     /**
      * Verifies that specific class files exist in the output directory.
-     * 
-     * @param outputDirectory The output directory to check
-     * @param expectedClassNames List of expected class file names (without .class extension)
      */
     protected fun assertClassFilesExist(outputDirectory: Path, vararg expectedClassNames: String) {
         val classFiles = getGeneratedClassFiles(outputDirectory)
-        
+
         expectedClassNames.forEach { expectedClassName ->
             val expectedFileName = "$expectedClassName.class"
             assertTrue(
@@ -105,21 +108,14 @@ abstract class TestBase {
 
     /**
      * Verifies that no class files were generated in the output directory.
-     * 
-     * @param outputDirectory The output directory to check
      */
-    protected fun assertNoClassFilesGenerated(
-        outputDirectory: Path
-    ) {
+    protected fun assertNoClassFilesGenerated(outputDirectory: Path) {
         val classFiles = getGeneratedClassFiles(outputDirectory)
         assertTrue(classFiles.isEmpty(), "No class files should be produced on compilation error, but found: $classFiles")
     }
 
     /**
      * Gets the list of generated class files in the output directory.
-     * 
-     * @param outputDirectory The output directory to scan
-     * @return List of class file names
      */
     protected fun getGeneratedClassFiles(outputDirectory: Path): List<String> {
         return Files.walk(outputDirectory)
@@ -128,4 +124,36 @@ abstract class TestBase {
             .toList()
     }
 
+    companion object {
+        private val createdWorkspaces: ConcurrentLinkedQueue<Path> = ConcurrentLinkedQueue()
+
+        @Volatile
+        private var shutdownHookInstalled: Boolean = false
+
+        private fun ensureShutdownHookInstalled() {
+            if (shutdownHookInstalled) return
+            synchronized(this) {
+                if (shutdownHookInstalled) return
+                Runtime.getRuntime().addShutdownHook(Thread {
+                    createdWorkspaces.forEach { path ->
+                        runCatching { deleteWorkspaceRecursively(path) }
+                    }
+                })
+                shutdownHookInstalled = true
+            }
+        }
+
+        @OptIn(ExperimentalPathApi::class)
+        private fun deleteWorkspaceRecursively(path: Path) {
+            try {
+                if (path.exists()) path.deleteRecursively()
+            } catch (_: Throwable) {
+                if (Files.exists(path)) {
+                    Files.walk(path)
+                        .sorted(Comparator.reverseOrder())
+                        .forEach { p -> runCatching { Files.deleteIfExists(p) }.getOrElse { if (it !is IOException) throw it } }
+                }
+            }
+        }
+    }
 }

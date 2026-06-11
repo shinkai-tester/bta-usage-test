@@ -1,4 +1,6 @@
 import support.TestBase
+import framework.applyTestDefaults
+import framework.loadToolchain
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
 import org.jetbrains.kotlin.buildtools.api.KotlinToolchains
 import org.jetbrains.kotlin.buildtools.api.RemovedCompilerArgument
@@ -7,6 +9,8 @@ import org.jetbrains.kotlin.buildtools.api.arguments.CompilerPlugin
 import org.jetbrains.kotlin.buildtools.api.arguments.ExperimentalCompilerArgument
 import org.jetbrains.kotlin.buildtools.api.arguments.JvmCompilerArguments
 import org.jetbrains.kotlin.buildtools.api.arguments.JvmCompilerArguments.Companion.JAVA_PARAMETERS
+import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain.Companion.jvm
+import org.jetbrains.kotlin.buildtools.api.jvm.jvmCompilationOperation
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -32,14 +36,16 @@ class CompilerArgumentsApiTest : TestBase() {
 
     @BeforeAll
     fun initToolchain() {
-        toolchain = framework.loadToolchain()
+        toolchain = loadToolchain()
     }
 
     @OptIn(ExperimentalCompilerArgument::class, RemovedCompilerArgument::class)
     @Test
     @DisplayName("Throws IllegalStateException when argument has no default and was not set")
     fun testArgumentWithNoDefaultThrowsWhenNotSet() {
-        val op = framework.createJvmCompilationOperation(toolchain, emptyList(), framework.createTempWorkspace())
+        val op = toolchain.jvm.jvmCompilationOperation(emptyList(), createTempWorkspace()) {
+            compilerArguments.applyTestDefaults()
+        }
         val args = op.compilerArguments
 
         val ex = assertThrows<IllegalStateException> {
@@ -55,7 +61,9 @@ class CompilerArgumentsApiTest : TestBase() {
     @Test
     @DisplayName("Default exists (JVM, Boolean): read succeeds without setting")
     fun testJvmArgumentWithDefault() {
-        val op = framework.createJvmCompilationOperation(toolchain, emptyList(), framework.createTempWorkspace())
+        val op = toolchain.jvm.jvmCompilationOperation(emptyList(), createTempWorkspace()) {
+            compilerArguments.applyTestDefaults()
+        }
         val args = op.compilerArguments
 
         val value: Boolean = args[JAVA_PARAMETERS]
@@ -65,7 +73,9 @@ class CompilerArgumentsApiTest : TestBase() {
     @Test
     @DisplayName("Default exists (Common, empty list): read succeeds without setting")
     fun testCommonArgumentWithDefault() {
-        val op = framework.createJvmCompilationOperation(toolchain, emptyList(), framework.createTempWorkspace())
+        val op = toolchain.jvm.jvmCompilationOperation(emptyList(), createTempWorkspace()) {
+            compilerArguments.applyTestDefaults()
+        }
         val args = op.compilerArguments
 
         val value: List<CompilerPlugin> = args[CommonCompilerArguments.COMPILER_PLUGINS]

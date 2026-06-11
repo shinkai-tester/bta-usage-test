@@ -32,12 +32,12 @@ class IncrementalCompilationTest : TestBase() {
         val setup = createTestSetup()
 
         // Create two source files
-        val manaSource = framework.createKotlinSource(setup.workspace, "ManaSource.kt", """
+        val manaSource = createKotlinSource(setup.workspace, "ManaSource.kt", """
             package fantasy.resources
             class ManaSource { fun mana(): Int = 1 }
         """)
 
-        val spellcaster = framework.createKotlinSource(setup.workspace, "Spellcaster.kt", """
+        val spellcaster = createKotlinSource(setup.workspace, "Spellcaster.kt", """
             package fantasy.casters
             import fantasy.resources.ManaSource
             class Spellcaster { fun use() = ManaSource().mana().toString().length }
@@ -50,8 +50,7 @@ class IncrementalCompilationTest : TestBase() {
                 listOf(manaSource, spellcaster),
                 setup.outputDirectory,
                 setup.icDirectory,
-                setup.workspace,
-                framework
+                setup.workspace
             )
             val result1 = CompilationTestUtils.runCompile(session, operation1, policy)
             assertEquals(result1, CompilationResult.COMPILATION_SUCCESS, "Initial compilation should succeed")
@@ -72,8 +71,7 @@ class IncrementalCompilationTest : TestBase() {
                 listOf(manaSource, spellcaster),
                 setup.outputDirectory,
                 setup.icDirectory,
-                setup.workspace,
-                framework
+                setup.workspace
             )
             val result2 = CompilationTestUtils.runCompile(session, operation2, policy)
             assertEquals(
@@ -107,12 +105,12 @@ class IncrementalCompilationTest : TestBase() {
         val setup = createTestSetup()
 
         // Create two source files
-        val rune = framework.createKotlinSource(setup.workspace, "Rune.kt", """
+        val rune = createKotlinSource(setup.workspace, "Rune.kt", """
             package fantasy.runes
             class Rune { fun power(): Int = 1 }
         """)
 
-        val runeReader = framework.createKotlinSource(setup.workspace, "RuneReader.kt", """
+        val runeReader = createKotlinSource(setup.workspace, "RuneReader.kt", """
             package fantasy.readers
             import fantasy.runes.Rune
             class RuneReader { fun use() = Rune().power().toString().length }
@@ -125,8 +123,7 @@ class IncrementalCompilationTest : TestBase() {
                 listOf(rune, runeReader),
                 setup.outputDirectory,
                 setup.icDirectory,
-                setup.workspace,
-                framework
+                setup.workspace
             )
             val result1 = CompilationTestUtils.runCompile(session, operation1, policy)
             assertEquals(result1, CompilationResult.COMPILATION_SUCCESS, "Initial compilation should succeed")
@@ -147,8 +144,7 @@ class IncrementalCompilationTest : TestBase() {
                 listOf(rune, runeReader),
                 setup.outputDirectory,
                 setup.icDirectory,
-                setup.workspace,
-                framework
+                setup.workspace
             )
             val result2 = CompilationTestUtils.runCompile(session, operation2, policy)
             assertEquals(result2, CompilationResult.COMPILATION_SUCCESS, "Compilation after ABI change should succeed")

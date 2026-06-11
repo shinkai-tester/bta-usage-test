@@ -1,10 +1,12 @@
 package utils
 
-import BtaTestFacade
+import framework.applyBasicCompilerArguments
 import org.jetbrains.kotlin.buildtools.api.*
 import org.jetbrains.kotlin.buildtools.api.jvm.ClassSnapshotGranularity
-import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain
 import org.jetbrains.kotlin.buildtools.api.jvm.ClasspathEntrySnapshot
+import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain.Companion.jvm
+import org.jetbrains.kotlin.buildtools.api.jvm.classpathSnapshottingOperation
+import org.jetbrains.kotlin.buildtools.api.jvm.jvmCompilationOperation
 import org.jetbrains.kotlin.buildtools.api.jvm.operations.JvmClasspathSnapshottingOperation
 import org.jetbrains.kotlin.buildtools.api.jvm.operations.JvmCompilationOperation
 import org.jetbrains.kotlin.buildtools.api.trackers.CompilerLookupTracker
@@ -13,7 +15,8 @@ import kotlin.io.path.createDirectories
 
 /**
  * Utilities for incremental compilation testing, providing helper methods for IC configuration.
- * Uses the new builder pattern API to avoid deprecated interfaces.
+ * Built on the `toolchain.jvm` extension and the `jvmCompilationOperation { ... }` /
+ * `classpathSnapshottingOperation { ... }` convenience functions.
  */
 @OptIn(ExperimentalBuildToolsApi::class)
 object IncrementalCompilationUtils {
@@ -67,7 +70,6 @@ object IncrementalCompilationUtils {
      * @param outDir Output directory for compiled classes
      * @param icDir Directory for incremental compilation caches
      * @param workspace The workspace/module directory
-     * @param framework The test framework instance for configuration
      * @param lookupTracker Optional lookup tracker to attach to the operation
      * @param dependencySnapshots List of dependency snapshot file paths for classpath change detection
      * @return Configured JvmCompilationOperation with incremental compilation
@@ -79,22 +81,16 @@ object IncrementalCompilationUtils {
         outDir: Path,
         icDir: Path,
         workspace: Path,
-        framework: BtaTestFacade,
         lookupTracker: CompilerLookupTracker? = null,
         dependencySnapshots: List<Path> = emptyList()
-    ): JvmCompilationOperation {
-        val jvmToolchain = toolchain.getToolchain(JvmPlatformToolchain::class.java)
-        val opBuilder = jvmToolchain.jvmCompilationOperationBuilder(sources, outDir)
+    ): JvmCompilationOperation = toolchain.jvm.jvmCompilationOperation(sources, outDir) {
+        compilerArguments.applyBasicCompilerArguments("test-module")
 
-        framework.configureBasicCompilerArguments(opBuilder.compilerArguments, "test-module")
-
-        configureIcOnBuilder(opBuilder, icDir, outDir, workspace, dependencySnapshots = dependencySnapshots)
+        configureIcOnBuilder(this, icDir, outDir, workspace, dependencySnapshots = dependencySnapshots)
 
         if (lookupTracker != null) {
-            opBuilder[BaseCompilationOperation.LOOKUP_TRACKER] = lookupTracker
+            this[BaseCompilationOperation.LOOKUP_TRACKER] = lookupTracker
         }
-
-        return opBuilder.build()
     }
 
     /**
@@ -121,12 +117,12 @@ object IncrementalCompilationUtils {
         granularity: ClassSnapshotGranularity = ClassSnapshotGranularity.CLASS_MEMBER_LEVEL,
         parseInlinedLocalClasses: Boolean = false
     ): Path {
-        val jvmToolchain = toolchain.getToolchain(JvmPlatformToolchain::class.java)
-        val snapshotBuilder = jvmToolchain.classpathSnapshottingOperationBuilder(classpathEntry)
-        snapshotBuilder[JvmClasspathSnapshottingOperation.GRANULARITY] = granularity
-        snapshotBuilder[JvmClasspathSnapshottingOperation.PARSE_INLINED_LOCAL_CLASSES] = parseInlinedLocalClasses
+        val snapshotOperation = toolchain.jvm.classpathSnapshottingOperation(classpathEntry) {
+            this[JvmClasspathSnapshottingOperation.GRANULARITY] = granularity
+            this[JvmClasspathSnapshottingOperation.PARSE_INLINED_LOCAL_CLASSES] = parseInlinedLocalClasses
+        }
 
-        val snapshotResult = session.executeOperation(snapshotBuilder.build())
+        val snapshotResult = session.executeOperation(snapshotOperation)
 
         snapshotOutputDir.createDirectories()
         val snapshotFile = snapshotOutputDir.resolve("dep-${classpathEntry.fileName}.snapshot")

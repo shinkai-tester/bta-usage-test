@@ -2,12 +2,15 @@ import org.jetbrains.kotlin.buildtools.api.BaseCompilationOperation
 import org.jetbrains.kotlin.buildtools.api.ExecutionPolicy
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
 import org.jetbrains.kotlin.buildtools.api.KotlinToolchains
+import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain.Companion.jvm
+import org.jetbrains.kotlin.buildtools.api.jvm.jvmCompilationOperation
 import org.jetbrains.kotlin.buildtools.api.trackers.CompilerLookupTracker
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ArgumentsSource
 import support.ExecutionPolicyArgumentProvider
 import support.TestBase
+import framework.applyTestDefaults
 import utils.CompilationTestUtils
 import utils.IncrementalCompilationUtils
 import kotlin.test.assertTrue
@@ -55,14 +58,14 @@ class LookupTrackerTest : TestBase() {
         val (toolchain, policy) = execution
         val setup = createTestSetup()
 
-        val utilsSource = framework.createKotlinSource(setup.workspace, "StringUtils.kt", """
+        val utilsSource = createKotlinSource(setup.workspace, "StringUtils.kt", """
             package com.example.utils
 
             fun formatDate(timestamp: Long): String = timestamp.toString()
             fun formatNumber(value: Int): String = value.toString()
         """)
 
-        val serviceSource = framework.createKotlinSource(setup.workspace, "MyService.kt", """
+        val serviceSource = createKotlinSource(setup.workspace, "MyService.kt", """
             package com.example.service
             import com.example.utils.formatDate
 
@@ -77,7 +80,7 @@ class LookupTrackerTest : TestBase() {
         val sources = listOf(utilsSource, serviceSource)
 
         val operation = IncrementalCompilationUtils.createIncrementalJvmOperation(
-            toolchain, sources, setup.outputDirectory, setup.icDirectory, setup.workspace, framework, lookupTracker
+            toolchain, sources, setup.outputDirectory, setup.icDirectory, setup.workspace, lookupTracker
         )
 
         val result = CompilationTestUtils.runCompile(toolchain, operation, policy)
@@ -106,13 +109,13 @@ class LookupTrackerTest : TestBase() {
         val (toolchain, policy) = execution
         val setup = createTestSetup()
 
-        val modelSource = framework.createKotlinSource(setup.workspace, "User.kt", """
+        val modelSource = createKotlinSource(setup.workspace, "User.kt", """
             package com.example.model
 
             data class User(val id: Int, val name: String)
         """)
 
-        val repoSource = framework.createKotlinSource(setup.workspace, "UserRepository.kt", """
+        val repoSource = createKotlinSource(setup.workspace, "UserRepository.kt", """
             package com.example.repository
             import com.example.model.User
 
@@ -128,7 +131,7 @@ class LookupTrackerTest : TestBase() {
         val sources = listOf(modelSource, repoSource)
 
         val operation = IncrementalCompilationUtils.createIncrementalJvmOperation(
-            toolchain, sources, setup.outputDirectory, setup.icDirectory, setup.workspace, framework, lookupTracker
+            toolchain, sources, setup.outputDirectory, setup.icDirectory, setup.workspace, lookupTracker
         )
 
         val result = CompilationTestUtils.runCompile(toolchain, operation, policy)
@@ -157,14 +160,14 @@ class LookupTrackerTest : TestBase() {
         val (toolchain, policy) = execution
         val setup = createTestSetup()
 
-        val extensionsSource = framework.createKotlinSource(setup.workspace, "StringExtensions.kt", """
+        val extensionsSource = createKotlinSource(setup.workspace, "StringExtensions.kt", """
             package com.example.extensions
 
             fun String.toTitleCase(): String =
                 this.split(" ").joinToString(" ") { it.capitalize() }
         """)
 
-        val usageSource = framework.createKotlinSource(setup.workspace, "TextProcessor.kt", """
+        val usageSource = createKotlinSource(setup.workspace, "TextProcessor.kt", """
             package com.example.processor
             import com.example.extensions.toTitleCase
 
@@ -176,15 +179,10 @@ class LookupTrackerTest : TestBase() {
         val recordedLookups = mutableListOf<RecordedLookup>()
         val lookupTracker = createLookupTracker(recordedLookups)
 
-        val baseOperation = framework.createJvmCompilationOperation(
-            toolchain,
-            listOf(extensionsSource, usageSource),
-            setup.outputDirectory
-        )
-
-        val opBuilder = baseOperation.toBuilder()
-        opBuilder[BaseCompilationOperation.LOOKUP_TRACKER] = lookupTracker
-        val operation = opBuilder.build()
+        val operation = toolchain.jvm.jvmCompilationOperation(listOf(extensionsSource, usageSource), setup.outputDirectory) {
+            compilerArguments.applyTestDefaults()
+            this[BaseCompilationOperation.LOOKUP_TRACKER] = lookupTracker
+        }
 
         val result = CompilationTestUtils.runCompile(toolchain, operation, policy)
 
@@ -211,7 +209,7 @@ class LookupTrackerTest : TestBase() {
         val (toolchain, policy) = execution
         val setup = createTestSetup()
 
-        val configSource = framework.createKotlinSource(setup.workspace, "AppConfig.kt", """
+        val configSource = createKotlinSource(setup.workspace, "AppConfig.kt", """
             package com.example.config
 
             object AppConfig {
@@ -221,7 +219,7 @@ class LookupTrackerTest : TestBase() {
             }
         """)
 
-        val usageSource = framework.createKotlinSource(setup.workspace, "ConfigReader.kt", """
+        val usageSource = createKotlinSource(setup.workspace, "ConfigReader.kt", """
             package com.example.reader
             import com.example.config.AppConfig
 
@@ -234,15 +232,10 @@ class LookupTrackerTest : TestBase() {
         val recordedLookups = mutableListOf<RecordedLookup>()
         val lookupTracker = createLookupTracker(recordedLookups)
 
-        val baseOperation = framework.createJvmCompilationOperation(
-            toolchain,
-            listOf(configSource, usageSource),
-            setup.outputDirectory
-        )
-
-        val opBuilder = baseOperation.toBuilder()
-        opBuilder[BaseCompilationOperation.LOOKUP_TRACKER] = lookupTracker
-        val operation = opBuilder.build()
+        val operation = toolchain.jvm.jvmCompilationOperation(listOf(configSource, usageSource), setup.outputDirectory) {
+            compilerArguments.applyTestDefaults()
+            this[BaseCompilationOperation.LOOKUP_TRACKER] = lookupTracker
+        }
 
         val result = CompilationTestUtils.runCompile(toolchain, operation, policy)
 

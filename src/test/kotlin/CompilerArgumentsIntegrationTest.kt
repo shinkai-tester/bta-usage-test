@@ -1,6 +1,8 @@
 import support.TestBase
 import framework.TestLogger
+import framework.applyBasicCompilerArguments
 import framework.configureDaemonPolicy
+import framework.loadToolchain
 import org.jetbrains.kotlin.buildtools.api.ExecutionPolicy
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
 import org.jetbrains.kotlin.buildtools.api.KotlinToolchains
@@ -8,7 +10,8 @@ import org.jetbrains.kotlin.buildtools.api.arguments.CommonCompilerArguments
 import org.jetbrains.kotlin.buildtools.api.arguments.JvmCompilerArguments
 import org.jetbrains.kotlin.buildtools.api.arguments.enums.JvmTarget
 import org.jetbrains.kotlin.buildtools.api.arguments.enums.KotlinVersion
-import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain
+import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain.Companion.jvm
+import org.jetbrains.kotlin.buildtools.api.jvm.jvmCompilationOperation
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -35,7 +38,7 @@ class CompilerArgumentsIntegrationTest : TestBase() {
 
     @BeforeAll
     fun initCommonToolchain() {
-        toolchain = framework.loadToolchain()
+        toolchain = loadToolchain()
         daemonPolicy = configureDaemonPolicy(toolchain)
     }
 
@@ -43,7 +46,7 @@ class CompilerArgumentsIntegrationTest : TestBase() {
     @DisplayName("Check setting of common compiler arguments")
     fun testCommonCompilerArguments() {
         val setup = createTestSetup()
-        val annotationsKt = framework.createKotlinSource(
+        val annotationsKt = createKotlinSource(
             setup.workspace, "annotations.kt", """
         package test.common
 
@@ -54,7 +57,7 @@ class CompilerArgumentsIntegrationTest : TestBase() {
         fun experimentalApi(): String = "exp"
     """
         )
-        val usageKt = framework.createKotlinSource(
+        val usageKt = createKotlinSource(
             setup.workspace, "useExperimental.kt", """
         package test.common
 
@@ -64,19 +67,13 @@ class CompilerArgumentsIntegrationTest : TestBase() {
     """
         )
 
-        val jvmToolchain = toolchain.getToolchain(JvmPlatformToolchain::class.java)
-        val builder = jvmToolchain.jvmCompilationOperationBuilder(
-            listOf(annotationsKt, usageKt),
-            setup.outputDirectory
-        )
-
-        framework.configureBasicCompilerArguments(builder.compilerArguments, "test-module")
-        builder.compilerArguments[CommonCompilerArguments.LANGUAGE_VERSION] = KotlinVersion.V2_4
-        builder.compilerArguments[CommonCompilerArguments.API_VERSION] = KotlinVersion.V2_4
-        builder.compilerArguments[CommonCompilerArguments.PROGRESSIVE] = true
-        builder.compilerArguments[CommonCompilerArguments.OPT_IN] = listOf("test.common.MyExperimental")
-
-        val op = builder.build()
+        val op = toolchain.jvm.jvmCompilationOperation(listOf(annotationsKt, usageKt), setup.outputDirectory) {
+            compilerArguments.applyBasicCompilerArguments("test-module")
+            compilerArguments[CommonCompilerArguments.LANGUAGE_VERSION] = KotlinVersion.V2_4
+            compilerArguments[CommonCompilerArguments.API_VERSION] = KotlinVersion.V2_4
+            compilerArguments[CommonCompilerArguments.PROGRESSIVE] = true
+            compilerArguments[CommonCompilerArguments.OPT_IN] = listOf("test.common.MyExperimental")
+        }
 
         val logger = TestLogger()
         val result = CompilationTestUtils.runCompile(toolchain, op, daemonPolicy, logger)
@@ -88,7 +85,7 @@ class CompilerArgumentsIntegrationTest : TestBase() {
     @DisplayName("JVM-specific arguments: jvm-target, module-name")
     fun testJvmSpecificArguments() {
         val setup = createTestSetup()
-        val src = framework.createKotlinSource(
+        val src = createKotlinSource(
             setup.workspace, "Simple.kt", """
         class Greeter {
             fun greet(name: String): String = "Hello, " + name
@@ -98,13 +95,10 @@ class CompilerArgumentsIntegrationTest : TestBase() {
         """
         )
 
-        val jvmToolchain = toolchain.getToolchain(JvmPlatformToolchain::class.java)
-        val builder = jvmToolchain.jvmCompilationOperationBuilder(listOf(src), setup.outputDirectory)
-
-        framework.configureBasicCompilerArguments(builder.compilerArguments, "simple-module")
-        builder.compilerArguments[JvmCompilerArguments.JVM_TARGET] = JvmTarget.JVM_17
-
-        val op = builder.build()
+        val op = toolchain.jvm.jvmCompilationOperation(listOf(src), setup.outputDirectory) {
+            compilerArguments.applyBasicCompilerArguments("simple-module")
+            compilerArguments[JvmCompilerArguments.JVM_TARGET] = JvmTarget.JVM_17
+        }
 
         val result = CompilationTestUtils.runCompile(toolchain, op, daemonPolicy, TestLogger())
         assertCompilationSuccessful(result)
@@ -121,20 +115,17 @@ class CompilerArgumentsIntegrationTest : TestBase() {
     @DisplayName("Error handling: missing stdlib causes compilation failure")
     fun testMissingStdlibCausesFailure() {
         val setup = createTestSetup()
-        val src = framework.createKotlinSource(
+        val src = createKotlinSource(
             setup.workspace, "NeedsStdlib.kt", """
             fun build(): List<String> = listOf("a", "b")
         """
         )
 
-        val jvmToolchain = toolchain.getToolchain(JvmPlatformToolchain::class.java)
-        val builder = jvmToolchain.jvmCompilationOperationBuilder(listOf(src), setup.outputDirectory)
-
-        builder.compilerArguments[JvmCompilerArguments.NO_STDLIB] = true
-        builder.compilerArguments[JvmCompilerArguments.CLASSPATH] = emptyList()
-        builder.compilerArguments[JvmCompilerArguments.MODULE_NAME] = "test-module"
-
-        val op = builder.build()
+        val op = toolchain.jvm.jvmCompilationOperation(listOf(src), setup.outputDirectory) {
+            compilerArguments[JvmCompilerArguments.NO_STDLIB] = true
+            compilerArguments[JvmCompilerArguments.CLASSPATH] = emptyList()
+            compilerArguments[JvmCompilerArguments.MODULE_NAME] = "test-module"
+        }
 
         val logger = TestLogger()
         val result = CompilationTestUtils.runCompile(toolchain, op, daemonPolicy, logger)

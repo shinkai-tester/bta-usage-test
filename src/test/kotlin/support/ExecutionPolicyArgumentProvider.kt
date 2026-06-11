@@ -1,6 +1,6 @@
 package support
 
-import BtaTestFacade
+import framework.loadToolchain
 import org.jetbrains.kotlin.buildtools.api.ExecutionPolicy
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
 import org.jetbrains.kotlin.buildtools.api.KotlinToolchains
@@ -27,8 +27,7 @@ class ExecutionPolicyArgumentProvider : ArgumentsProvider {
 
     companion object {
         fun namedExecutionPolicyArguments(): List<Named<Pair<KotlinToolchains, ExecutionPolicy>>> {
-            val framework = BtaTestFacade()
-            val toolchain = framework.loadToolchain()
+            val toolchain = loadToolchain()
 
             return listOf(
                 named(

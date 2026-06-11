@@ -4,7 +4,8 @@ import org.jetbrains.kotlin.buildtools.api.KotlinToolchains
 import org.jetbrains.kotlin.buildtools.api.arguments.ExperimentalCompilerArgument
 import org.jetbrains.kotlin.buildtools.api.arguments.JvmCompilerArguments
 import org.jetbrains.kotlin.buildtools.api.arguments.enums.JvmTarget
-import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain
+import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain.Companion.jvm
+import org.jetbrains.kotlin.buildtools.api.jvm.jvmCompilationOperation
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -48,15 +49,15 @@ fun main(vararg implClasspath: String) {
     // Load the toolchain in an isolated classloader
     val toolchain = KotlinToolchains.loadImplementation(implPaths)
 
-    // Build the compilation operation.
-    val jvm = toolchain.getToolchain(JvmPlatformToolchain::class.java)
-    val op = jvm.jvmCompilationOperationBuilder(listOf(src), outDir).apply {
+    // Build the compilation operation via the `toolchain.jvm` extension and the
+    // `jvmCompilationOperation(sources, outDir) { ... }` convenience function.
+    val op = toolchain.jvm.jvmCompilationOperation(listOf(src), outDir) {
         compilerArguments[JvmCompilerArguments.NO_STDLIB] = true
         compilerArguments[JvmCompilerArguments.NO_REFLECT] = true
         compilerArguments[JvmCompilerArguments.CLASSPATH] = listOf(findStdlibJar())
         compilerArguments[JvmCompilerArguments.JVM_TARGET] = JvmTarget.JVM_11
         compilerArguments[JvmCompilerArguments.MODULE_NAME] = "bta.main.example"
-    }.build()
+    }
 
     // Execute in-process within a build session.
     val result = toolchain.createBuildSession().use { session ->

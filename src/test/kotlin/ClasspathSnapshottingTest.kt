@@ -5,13 +5,15 @@ import org.jetbrains.kotlin.buildtools.api.KotlinToolchains
 import org.jetbrains.kotlin.buildtools.api.arguments.ExperimentalCompilerArgument
 import org.jetbrains.kotlin.buildtools.api.arguments.JvmCompilerArguments
 import org.jetbrains.kotlin.buildtools.api.jvm.ClassSnapshotGranularity
-import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain
+import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain.Companion.jvm
+import org.jetbrains.kotlin.buildtools.api.jvm.jvmCompilationOperation
 import org.jetbrains.kotlin.buildtools.api.jvm.operations.JvmCompilationOperation
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ArgumentsSource
 import support.ExecutionPolicyArgumentProvider
 import support.TestBase
+import framework.applyTestDefaults
 import utils.CompilationTestUtils
 import utils.IncrementalCompilationUtils
 import utils.StdlibUtils
@@ -40,14 +42,16 @@ class ClasspathSnapshottingTest : TestBase() {
         val setup = createTestSetup()
         val snapshotDir = setup.workspace.resolve("snapshots").createDirectories()
 
-        val source = framework.createKotlinSource(setup.workspace, "LibClass.kt", """
+        val source = createKotlinSource(setup.workspace, "LibClass.kt", """
             package lib
             class LibClass {
                 fun greet(): String = "hello"
             }
         """)
 
-        val compileOp = framework.createJvmCompilationOperation(toolchain, listOf(source), setup.outputDirectory)
+        val compileOp = toolchain.jvm.jvmCompilationOperation(listOf(source), setup.outputDirectory) {
+            compilerArguments.applyTestDefaults()
+        }
         val result = CompilationTestUtils.runCompile(toolchain, compileOp, policy)
         assertCompilationSuccessful(result)
 
@@ -68,12 +72,14 @@ class ClasspathSnapshottingTest : TestBase() {
         val setup = createTestSetup()
         val snapshotDir = setup.workspace.resolve("snapshots").createDirectories()
 
-        val source = framework.createKotlinSource(setup.workspace, "DataModel.kt", """
+        val source = createKotlinSource(setup.workspace, "DataModel.kt", """
             package model
             data class DataModel(val id: Int, val name: String)
         """)
 
-        val compileOp = framework.createJvmCompilationOperation(toolchain, listOf(source), setup.outputDirectory)
+        val compileOp = toolchain.jvm.jvmCompilationOperation(listOf(source), setup.outputDirectory) {
+            compilerArguments.applyTestDefaults()
+        }
         val result = CompilationTestUtils.runCompile(toolchain, compileOp, policy)
         assertCompilationSuccessful(result)
 
@@ -94,22 +100,24 @@ class ClasspathSnapshottingTest : TestBase() {
         val (toolchain, policy) = execution
 
         // Set up "lib" module workspace
-        val libWorkspace = framework.createTempWorkspace()
+        val libWorkspace = createTempWorkspace()
         val libOutDir = libWorkspace.resolve("out").createDirectories()
         val snapshotDir = libWorkspace.resolve("snapshots").createDirectories()
 
         // Set up "app" module workspace
-        val appWorkspace = framework.createTempWorkspace()
+        val appWorkspace = createTempWorkspace()
         val appOutDir = appWorkspace.resolve("out").createDirectories()
         val appIcDir = appWorkspace.resolve("ic").createDirectories()
 
         // --- Step 1: Compile the "lib" module ---
-        val libSource = framework.createKotlinSource(libWorkspace, "Provider.kt", """
+        val libSource = createKotlinSource(libWorkspace, "Provider.kt", """
             package lib
             class Provider { fun value(): Int = 100 }
         """)
 
-        val libCompileOp = framework.createJvmCompilationOperation(toolchain, listOf(libSource), libOutDir)
+        val libCompileOp = toolchain.jvm.jvmCompilationOperation(listOf(libSource), libOutDir) {
+            compilerArguments.applyTestDefaults()
+        }
         val libResult = CompilationTestUtils.runCompile(toolchain, libCompileOp, policy)
         assertCompilationSuccessful(libResult)
 
@@ -120,7 +128,7 @@ class ClasspathSnapshottingTest : TestBase() {
             )
 
             // --- Step 3: Initial IC compile of "app" module with "lib" as dependency ---
-            val appSource = framework.createKotlinSource(appWorkspace, "Consumer.kt", """
+            val appSource = createKotlinSource(appWorkspace, "Consumer.kt", """
                 package app
                 import lib.Provider
                 class Consumer { fun use() = Provider().value().toString().length }
@@ -142,7 +150,9 @@ class ClasspathSnapshottingTest : TestBase() {
                 class Provider { fun value(): Int = 200 }
             """.trimIndent())
 
-            val libCompileOp2 = framework.createJvmCompilationOperation(toolchain, listOf(libSource), libOutDir)
+            val libCompileOp2 = toolchain.jvm.jvmCompilationOperation(listOf(libSource), libOutDir) {
+                compilerArguments.applyTestDefaults()
+            }
             val libResult2 = CompilationTestUtils.runCompile(session, libCompileOp2, policy)
             assertCompilationSuccessful(libResult2)
 
@@ -182,25 +192,19 @@ class ClasspathSnapshottingTest : TestBase() {
         libOutDir: Path,
         sources: List<Path>,
         dependencySnapshots: List<Path>
-    ): JvmCompilationOperation {
-        val jvmToolchain = toolchain.getToolchain(JvmPlatformToolchain::class.java)
-        val opBuilder = jvmToolchain.jvmCompilationOperationBuilder(sources, appOutDir)
-
+    ): JvmCompilationOperation = toolchain.jvm.jvmCompilationOperation(sources, appOutDir) {
         // Configure classpath to include lib output + stdlib
         val stdlib = StdlibUtils.findStdlibJar()
         val classpathPaths = listOfNotNull(libOutDir, stdlib.takeIf { it.isNotBlank() }?.let { Path(it) })
 
-        val args = opBuilder.compilerArguments
-        args[JvmCompilerArguments.NO_STDLIB] = true
-        args[JvmCompilerArguments.NO_REFLECT] = true
-        args[JvmCompilerArguments.CLASSPATH] = classpathPaths
-        args[JvmCompilerArguments.MODULE_NAME] = "app-module"
+        compilerArguments[JvmCompilerArguments.NO_STDLIB] = true
+        compilerArguments[JvmCompilerArguments.NO_REFLECT] = true
+        compilerArguments[JvmCompilerArguments.CLASSPATH] = classpathPaths
+        compilerArguments[JvmCompilerArguments.MODULE_NAME] = "app-module"
 
         IncrementalCompilationUtils.configureIcOnBuilder(
-            opBuilder, appIcDir, appOutDir, appWorkspace,
+            this, appIcDir, appOutDir, appWorkspace,
             dependencySnapshots = dependencySnapshots
         )
-
-        return opBuilder.build()
     }
 }

@@ -3,11 +3,11 @@
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import java.io.File
 
-val kotlinVersion = "2.4.0-RC" // 2.4.255-SNAPSHOT + mavenLocal() for faster testing of fixes
+val kotlinVersion = "2.4.0" // 2.4.255-SNAPSHOT + mavenLocal() for faster testing of fixes
 
 plugins {
-    kotlin("jvm") version "2.4.0-RC"
-    kotlin("plugin.power-assert") version "2.4.0-RC"
+    kotlin("jvm") version "2.4.0"
+    kotlin("plugin.power-assert") version "2.4.0"
 }
 
 configurations {
@@ -24,8 +24,8 @@ dependencies {
     "oldCompilerForCancellation"("org.jetbrains.kotlin:kotlin-build-tools-impl:2.3.0")
 
     testImplementation(kotlin("test"))
-    testImplementation("org.junit.jupiter:junit-jupiter:6.0.3")
-    testImplementation("org.junit.jupiter:junit-jupiter-params:6.0.3")
+    testImplementation("org.junit.jupiter:junit-jupiter:6.1.0")
+    testImplementation("org.junit.jupiter:junit-jupiter-params:6.1.0")
 }
 
 tasks.test {

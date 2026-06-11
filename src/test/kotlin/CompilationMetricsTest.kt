@@ -1,10 +1,13 @@
 import support.ExecutionPolicyArgumentProvider
 import support.TestBase
 import framework.TestBuildMetricsCollector
+import framework.applyTestDefaults
 import org.jetbrains.kotlin.buildtools.api.BuildOperation.Companion.METRICS_COLLECTOR
 import org.jetbrains.kotlin.buildtools.api.ExecutionPolicy
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
 import org.jetbrains.kotlin.buildtools.api.KotlinToolchains
+import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain.Companion.jvm
+import org.jetbrains.kotlin.buildtools.api.jvm.jvmCompilationOperation
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ArgumentsSource
@@ -21,12 +24,14 @@ class CompilationMetricsTest : TestBase() {
     fun nonIncrementalCompilationMetrics(execution: Pair<KotlinToolchains, ExecutionPolicy>) {
         val (toolchain, policy) = execution
         val setup = createTestSetup()
-        val source = framework.createKotlinSource(setup.workspace, "Hello.kt", $$"""
+        val source = createKotlinSource(setup.workspace, "Hello.kt", $$"""
             fun hello(name: String) = "Hello, $name"
         """
         )
 
-        val baseOp = framework.createJvmCompilationOperation(toolchain, listOf(source), setup.outputDirectory)
+        val baseOp = toolchain.jvm.jvmCompilationOperation(listOf(source), setup.outputDirectory) {
+            compilerArguments.applyTestDefaults()
+        }
         val metricsCollector = TestBuildMetricsCollector()
         val opWithMetrics = baseOp.toBuilder().apply {
             this[METRICS_COLLECTOR] = metricsCollector
@@ -45,7 +50,7 @@ class CompilationMetricsTest : TestBase() {
         val (toolchain, policy) = execution
         val setup = createTestSetup()
 
-        val source = framework.createKotlinSource(setup.workspace, "Counter.kt", """
+        val source = createKotlinSource(setup.workspace, "Counter.kt", """
             class Counter { fun next(x: Int) = x + 1 }
         """)
 
@@ -54,8 +59,7 @@ class CompilationMetricsTest : TestBase() {
             listOf(source),
             setup.outputDirectory,
             setup.icDirectory,
-            setup.workspace,
-            framework
+            setup.workspace
         )
         val metricsCollector = TestBuildMetricsCollector()
         val opWithMetrics = baseOp.toBuilder().apply {

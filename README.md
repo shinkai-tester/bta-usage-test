@@ -4,13 +4,10 @@
 
 ### Main Source (`src/main/kotlin/`)
 
-**`BtaTestFacade.kt`** - main facade providing a unified interface for testing Kotlin compilation operations.
-
 **`Main.kt`** - self-contained in-process JVM compilation demo using the Build Tools API. Run with `./gradlew run`.
 
 #### `framework`
-- **`ToolchainManager.kt`** - toolchain loading and compiler argument configuration
-- **`WorkspaceManager.kt`** - temporary workspace and source file management
+- **`BuildToolsApiSupport.kt`** - toolchain loading (`loadToolchain`) and compiler-argument configuration helpers
 - **`TestLogger.kt`** - compilation log capturing and analysis
 - **`TestBuildMetricsCollector.kt`** - build metrics collection and aggregation
 - **`DaemonPolicy.kt`** - daemon execution policy configuration
@@ -23,6 +20,6 @@
 ### Test Source (`src/test/kotlin/`)
 
 #### `support` - test infra
-- **`TestBase.kt`** - base class providing common test setup, assertions, and verification utilities
+- **`TestBase.kt`** - base class providing temp workspace/source creation (with cleanup) and common compilation assertions
 - **`ExecutionPolicyArgumentProvider.kt`** - JUnit argument provider for parameterized execution policy tests
 

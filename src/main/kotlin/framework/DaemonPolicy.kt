@@ -6,7 +6,6 @@ import org.jetbrains.kotlin.buildtools.api.KotlinToolchains
 
 /**
  * Creates and configures a daemon execution policy with JVM arguments and shutdown delay.
- * Uses the proper BTA builder API instead of reflection.
  *
  * @param toolchains The Kotlin toolchains instance to create the daemon policy from
  * @param jvmArgs List of JVM arguments to pass to the daemon (e.g., "Xmx3g", "Xms1g")

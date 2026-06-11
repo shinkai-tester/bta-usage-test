@@ -1,10 +1,14 @@
 import support.ExecutionPolicyArgumentProvider
 import support.TestBase
+import framework.applyTestDefaults
 import framework.configureDaemonPolicy
+import framework.loadToolchain
 import org.jetbrains.kotlin.buildtools.api.CompilationResult
 import org.jetbrains.kotlin.buildtools.api.ExecutionPolicy
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
 import org.jetbrains.kotlin.buildtools.api.KotlinToolchains
+import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain.Companion.jvm
+import org.jetbrains.kotlin.buildtools.api.jvm.jvmCompilationOperation
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -29,12 +33,14 @@ class ExecutionPolicyTest : TestBase() {
     fun testBasicCompilation(execution: Pair<KotlinToolchains, ExecutionPolicy>) {
         val (toolchain, policy) = execution
         val setup = createTestSetup()
-        val source = framework.createKotlinSource(setup.workspace, "Utils.kt", $$"""
+        val source = createKotlinSource(setup.workspace, "Utils.kt", $$"""
             fun greet(name: String) = "Hello, $name"
         """
         )
 
-        val operation = framework.createJvmCompilationOperation(toolchain, listOf(source), setup.outputDirectory)
+        val operation = toolchain.jvm.jvmCompilationOperation(listOf(source), setup.outputDirectory) {
+            compilerArguments.applyTestDefaults()
+        }
         val result = CompilationTestUtils.runCompile(toolchain, operation, policy)
 
         assertEquals(CompilationResult.COMPILATION_SUCCESS, result)
@@ -44,12 +50,14 @@ class ExecutionPolicyTest : TestBase() {
     @DisplayName("Daemon execution with JVM args")
     fun testDaemonExecutionWithJvmArgs() {
         val setup = createTestSetup()
-        val source = framework.createKotlinSource(setup.workspace, "Calculator.kt", """
+        val source = createKotlinSource(setup.workspace, "Calculator.kt", """
             fun double(x: Int) = x * 2
         """)
 
-        val toolchain = framework.loadToolchain()
-        val operation = framework.createJvmCompilationOperation(toolchain, listOf(source), setup.outputDirectory)
+        val toolchain = loadToolchain()
+        val operation = toolchain.jvm.jvmCompilationOperation(listOf(source), setup.outputDirectory) {
+            compilerArguments.applyTestDefaults()
+        }
 
         val daemonPolicy = configureDaemonPolicy(toolchain, listOf("Xmx3g", "Xms1g"))
 

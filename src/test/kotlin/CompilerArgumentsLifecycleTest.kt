@@ -1,6 +1,10 @@
 import support.TestBase
 import framework.TestLogger
+import framework.applyTestDefaults
+import framework.loadToolchain
 import org.jetbrains.kotlin.buildtools.api.*
+import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain.Companion.jvm
+import org.jetbrains.kotlin.buildtools.api.jvm.jvmCompilationOperation
 import org.jetbrains.kotlin.buildtools.api.arguments.CommonCompilerArguments
 import org.jetbrains.kotlin.buildtools.api.arguments.ExperimentalCompilerArgument
 import org.jetbrains.kotlin.buildtools.api.arguments.JvmCompilerArguments
@@ -18,7 +22,7 @@ class CompilerArgumentsLifecycleTest : TestBase() {
 
     @BeforeAll
     fun initCommonToolchain() {
-        toolchain = framework.loadToolchain()
+        toolchain = loadToolchain()
         daemonPolicy = toolchain.createInProcessExecutionPolicy()
     }
 
@@ -27,17 +31,19 @@ class CompilerArgumentsLifecycleTest : TestBase() {
     @OptIn(ExperimentalCompilerArgument::class)
     fun testExperimentalArgument() {
         val setup = createTestSetup()
-        val src = framework.createKotlinSource(
+        val src = createKotlinSource(
             setup.workspace, "Foo.kt", """
             fun foo() = "test"
         """
         )
 
-        val builder = framework.createJvmCompilationOperationBuilder(toolchain, listOf(src), setup.outputDirectory)
-        builder.compilerArguments[CommonCompilerArguments.X_NO_INLINE] = true
-        builder.compilerArguments[JvmCompilerArguments.X_DEBUG] = true
+        val op = toolchain.jvm.jvmCompilationOperation(listOf(src), setup.outputDirectory) {
+            compilerArguments.applyTestDefaults()
+            compilerArguments[CommonCompilerArguments.X_NO_INLINE] = true
+            compilerArguments[JvmCompilerArguments.X_DEBUG] = true
+        }
 
-        val result = CompilationTestUtils.runCompile(toolchain, builder.build(), daemonPolicy)
+        val result = CompilationTestUtils.runCompile(toolchain, op, daemonPolicy)
 
         assertCompilationSuccessful(result, "Experimental argument with opt-in should work")
     }
@@ -47,19 +53,22 @@ class CompilerArgumentsLifecycleTest : TestBase() {
     @OptIn(ExperimentalCompilerArgument::class, RemovedCompilerArgument::class)
     fun testRemovedArgument() {
         val setup = createTestSetup()
-        val src = framework.createKotlinSource(
+        val src = createKotlinSource(
             setup.workspace, "Simple.kt", """
             fun test() = "test"
         """
         )
 
-        val builder = framework.createJvmCompilationOperationBuilder(toolchain, listOf(src), setup.outputDirectory)
-        builder.compilerArguments[JvmCompilerArguments.X_USE_K2_KAPT] = true
-
         val logger = TestLogger(true)
         var thrown: Throwable? = null
         val result = try {
-            CompilationTestUtils.runCompile(toolchain, builder.build(), daemonPolicy, logger)
+            // Building the operation already validates arguments and (with a removed argument)
+            // throws here, so the construction must stay inside the try-catch.
+            val op = toolchain.jvm.jvmCompilationOperation(listOf(src), setup.outputDirectory) {
+                compilerArguments.applyTestDefaults()
+                compilerArguments[JvmCompilerArguments.X_USE_K2_KAPT] = true
+            }
+            CompilationTestUtils.runCompile(toolchain, op, daemonPolicy, logger)
         } catch (t: Throwable) {
             thrown = t
             null
@@ -99,16 +108,18 @@ class CompilerArgumentsLifecycleTest : TestBase() {
     fun testDeprecatedArgument() {
         val setup = createTestSetup()
         val logger = TestLogger(true)
-        val src = framework.createKotlinSource(
+        val src = createKotlinSource(
             setup.workspace, "Simple.kt", """
             fun test() = "test"
         """
         )
 
-        val builder = framework.createJvmCompilationOperationBuilder(toolchain, listOf(src), setup.outputDirectory)
-        builder.compilerArguments[JvmCompilerArguments.X_JVM_DEFAULT] = "all"
+        val op = toolchain.jvm.jvmCompilationOperation(listOf(src), setup.outputDirectory) {
+            compilerArguments.applyTestDefaults()
+            compilerArguments[JvmCompilerArguments.X_JVM_DEFAULT] = "all"
+        }
 
-        val result = CompilationTestUtils.runCompile(toolchain, builder.build(), daemonPolicy, logger)
+        val result = CompilationTestUtils.runCompile(toolchain, op, daemonPolicy, logger)
 
         assertCompilationSuccessful(result, "Deprecated argument should still work at runtime with opt-in")
     }
@@ -117,11 +128,13 @@ class CompilerArgumentsLifecycleTest : TestBase() {
     @DisplayName("applyArgumentStrings: missing value for required option -> CompilerArgumentsParseException")
     fun testApplyArgumentMissingValue() {
         val setup = createTestSetup()
-        val src = framework.createKotlinSource(setup.workspace, "Foo.kt", """
+        val src = createKotlinSource(setup.workspace, "Foo.kt", """
         fun foo() = 42
     """)
 
-        val builder = framework.createJvmCompilationOperationBuilder(toolchain, listOf(src), setup.outputDirectory)
+        val builder = toolchain.jvm.jvmCompilationOperationBuilder(listOf(src), setup.outputDirectory).apply {
+            compilerArguments.applyTestDefaults()
+        }
 
         val ex = Assertions.assertThrows(CompilerArgumentsParseException::class.java) {
             builder.compilerArguments.applyArgumentStrings(listOf("-jvm-target"))
@@ -133,12 +146,14 @@ class CompilerArgumentsLifecycleTest : TestBase() {
     @DisplayName("Setting a key with availableSinceVersion > current BTA version fails early")
     fun testAvailableSince_guard_on_set() {
         val setup = createTestSetup()
-        val src = framework.createKotlinSource(setup.workspace, "Bar.kt", """
+        val src = createKotlinSource(setup.workspace, "Bar.kt", """
         fun bar() = 0
     """
         )
 
-        val builder = framework.createJvmCompilationOperationBuilder(toolchain, listOf(src), setup.outputDirectory)
+        val builder = toolchain.jvm.jvmCompilationOperationBuilder(listOf(src), setup.outputDirectory).apply {
+            compilerArguments.applyTestDefaults()
+        }
         val args = builder.compilerArguments
 
         val future = JvmCompilerArguments.JvmCompilerArgument<Boolean>(

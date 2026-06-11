@@ -1,9 +1,12 @@
 import support.ExecutionPolicyArgumentProvider
 import support.TestBase
 import framework.TestLogger
+import framework.applyTestDefaults
 import org.jetbrains.kotlin.buildtools.api.ExecutionPolicy
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
 import org.jetbrains.kotlin.buildtools.api.KotlinToolchains
+import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain.Companion.jvm
+import org.jetbrains.kotlin.buildtools.api.jvm.jvmCompilationOperation
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ArgumentsSource
@@ -29,13 +32,15 @@ class JvmCompilationTest : TestBase() {
     fun compileSimpleKotlinClass(execution: Pair<KotlinToolchains, ExecutionPolicy>) {
         val (toolchain, policy) = execution
         val setup = createTestSetup()
-        val source = framework.createKotlinSource(setup.workspace, "Bard.kt", """
+        val source = createKotlinSource(setup.workspace, "Bard.kt", """
             class Bard {
                 fun sing(): String = "Hail, BTA v2!"
             }
         """)
 
-        val operation = framework.createJvmCompilationOperation(toolchain, listOf(source), setup.outputDirectory)
+        val operation = toolchain.jvm.jvmCompilationOperation(listOf(source), setup.outputDirectory) {
+            compilerArguments.applyTestDefaults()
+        }
         val logger = TestLogger(printToConsole = true)
         val result = CompilationTestUtils.runCompile(toolchain, operation, policy, logger)
 
@@ -49,14 +54,16 @@ class JvmCompilationTest : TestBase() {
     fun failCompilationForInvalidCode(execution: Pair<KotlinToolchains, ExecutionPolicy>) {
         val (toolchain, policy) = execution
         val setup = createTestSetup()
-        val source = framework.createKotlinSource(setup.workspace, "CursedScroll.kt", """
+        val source = createKotlinSource(setup.workspace, "CursedScroll.kt", """
             class CursedScroll {
                 fun readSpell(): String = forbiddenSpell()
             }
         """)
 
-        val operation = framework.createJvmCompilationOperation(toolchain, listOf(source), setup.outputDirectory)
-        val testLogger = framework.createTestLogger()
+        val operation = toolchain.jvm.jvmCompilationOperation(listOf(source), setup.outputDirectory) {
+            compilerArguments.applyTestDefaults()
+        }
+        val testLogger = TestLogger()
         val result = CompilationTestUtils.runCompile(toolchain, operation, policy, testLogger)
 
         assertCompilationFailed(result)

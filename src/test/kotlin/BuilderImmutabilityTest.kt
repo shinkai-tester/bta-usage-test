@@ -1,8 +1,10 @@
 import support.TestBase
+import framework.applyBasicCompilerArguments
+import framework.loadToolchain
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
 import org.jetbrains.kotlin.buildtools.api.arguments.JvmCompilerArguments
 import org.jetbrains.kotlin.buildtools.api.arguments.enums.JvmTarget
-import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain
+import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain.Companion.jvm
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import utils.CompilationTestUtils
@@ -23,14 +25,13 @@ class BuilderImmutabilityTest : TestBase() {
     @DisplayName("Modifying builder after build does not affect the built operation")
     fun testBuilderImmutability() {
         val setup = createTestSetup()
-        val source = framework.createKotlinSource(setup.workspace, "Immutable.kt", """
+        val source = createKotlinSource(setup.workspace, "Immutable.kt", """
             class Immutable
         """)
 
-        val toolchain = framework.loadToolchain()
-        val jvmToolchain = toolchain.getToolchain(JvmPlatformToolchain::class.java)
-        val builder = jvmToolchain.jvmCompilationOperationBuilder(listOf(source), setup.outputDirectory)
-        framework.configureBasicCompilerArguments(builder.compilerArguments, "original-module")
+        val toolchain = loadToolchain()
+        val builder = toolchain.jvm.jvmCompilationOperationBuilder(listOf(source), setup.outputDirectory)
+        builder.compilerArguments.applyBasicCompilerArguments("original-module")
         builder.compilerArguments[JvmCompilerArguments.JVM_TARGET] = JvmTarget.JVM_17
 
         val operation = builder.build()
@@ -50,14 +51,13 @@ class BuilderImmutabilityTest : TestBase() {
     @DisplayName("toBuilder round-trip preserves immutability of original operation")
     fun testToBuilderImmutability() {
         val setup = createTestSetup()
-        val source = framework.createKotlinSource(setup.workspace, "RoundTrip.kt", """
+        val source = createKotlinSource(setup.workspace, "RoundTrip.kt", """
             class RoundTrip
         """)
 
-        val toolchain = framework.loadToolchain()
-        val jvmToolchain = toolchain.getToolchain(JvmPlatformToolchain::class.java)
-        val builder = jvmToolchain.jvmCompilationOperationBuilder(listOf(source), setup.outputDirectory)
-        framework.configureBasicCompilerArguments(builder.compilerArguments, "original")
+        val toolchain = loadToolchain()
+        val builder = toolchain.jvm.jvmCompilationOperationBuilder(listOf(source), setup.outputDirectory)
+        builder.compilerArguments.applyBasicCompilerArguments("original")
         builder.compilerArguments[JvmCompilerArguments.JVM_TARGET] = JvmTarget.JVM_17
 
         val original = builder.build()
