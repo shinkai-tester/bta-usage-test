@@ -97,8 +97,8 @@ object IncrementalCompilationUtils {
      * Generates a classpath snapshot for a given classpath entry (e.g., a compiled module's output directory
      * or a JAR dependency) and saves it to disk.
      *
-     * This follows the pattern from the Kotlin source of truth: use [JvmClasspathSnapshottingOperation]
-     * to compute a snapshot, then persist it via [ClasspathEntrySnapshot.saveSnapshot].
+     * Uses [JvmClasspathSnapshottingOperation] to compute the snapshot, then persists it via
+     * [ClasspathEntrySnapshot.saveSnapshot].
      *
      * @param toolchain The Kotlin toolchain to use
      * @param session The build session for executing the snapshotting operation
@@ -125,7 +125,11 @@ object IncrementalCompilationUtils {
         val snapshotResult = session.executeOperation(snapshotOperation)
 
         snapshotOutputDir.createDirectories()
-        val snapshotFile = snapshotOutputDir.resolve("dep-${classpathEntry.fileName}.snapshot")
+        // The snapshot file name must be unique per snapshot content: the compiler's
+        // CachedClasspathSnapshotSerializer caches deserialized snapshots by file path, so reusing a
+        // fixed name would make a later re-snapshot of the same dependency
+        // read the stale, previously cached snapshot and miss ABI changes.
+        val snapshotFile = snapshotOutputDir.resolve("dep-${snapshotResult.hashCode()}.snapshot")
         snapshotResult.saveSnapshot(snapshotFile)
 
         return snapshotFile

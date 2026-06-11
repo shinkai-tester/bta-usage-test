@@ -1,5 +1,6 @@
 package support
 
+import framework.TestLogger
 import org.jetbrains.kotlin.buildtools.api.CompilationResult
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
 import java.io.IOException
@@ -82,16 +83,6 @@ abstract class TestBase {
     }
 
     /**
-     * Verifies that compilation failed with an internal error.
-     */
-    protected fun assertCompilationInternalError(
-        result: CompilationResult,
-        message: String = "Expected compilation to fail with internal error"
-    ) {
-        kotlin.test.assertEquals(CompilationResult.COMPILER_INTERNAL_ERROR, result, message)
-    }
-
-    /**
      * Verifies that specific class files exist in the output directory.
      */
     protected fun assertClassFilesExist(outputDirectory: Path, vararg expectedClassNames: String) {
@@ -122,6 +113,43 @@ abstract class TestBase {
             .filter { it.isRegularFile() && it.extension == "class" }
             .map { it.name }
             .toList()
+    }
+
+    /**
+     * Returns the set of source files the compiler reported as (re)compiled, parsed from the
+     * `compile iteration:` debug log lines emitted by the incremental compiler.
+     */
+    protected fun recompiledSources(logger: TestLogger): Set<String> =
+        logger.getAllDebugMessages()
+            .asSequence()
+            .map { it.removePrefix("[KOTLIN] ") }
+            .filter { it.startsWith("compile iteration:") }
+            .flatMap { it.removePrefix("compile iteration:").trim().split(", ") }
+            .filter { it.isNotBlank() }
+            .toSet()
+
+    /**
+     * Asserts that [fileName] was among the sources recompiled in the given compilation (per the
+     * compiler's `compile iteration:` log).
+     */
+    protected fun assertRecompiled(logger: TestLogger, fileName: String) {
+        val compiled = recompiledSources(logger)
+        assertTrue(
+            compiled.any { it.endsWith(fileName) },
+            "Expected '$fileName' to be recompiled, but recompiled sources were: $compiled"
+        )
+    }
+
+    /**
+     * Asserts that [fileName] was NOT recompiled in the given compilation (per the compiler's
+     * `compile iteration:` log).
+     */
+    protected fun assertNotRecompiled(logger: TestLogger, fileName: String) {
+        val compiled = recompiledSources(logger)
+        assertTrue(
+            compiled.none { it.endsWith(fileName) },
+            "Expected '$fileName' NOT to be recompiled, but recompiled sources were: $compiled"
+        )
     }
 
     companion object {

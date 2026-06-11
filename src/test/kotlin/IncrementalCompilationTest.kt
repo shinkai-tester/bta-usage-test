@@ -1,6 +1,4 @@
-import support.ExecutionPolicyArgumentProvider
-import support.TestBase
-import org.jetbrains.kotlin.buildtools.api.CompilationResult
+import framework.TestLogger
 import org.jetbrains.kotlin.buildtools.api.ExecutionPolicy
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
 import org.jetbrains.kotlin.buildtools.api.KotlinToolchains
@@ -8,11 +6,11 @@ import org.jetbrains.kotlin.buildtools.api.arguments.ExperimentalCompilerArgumen
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ArgumentsSource
-import utils.CompilationTestUtils
+import support.ExecutionPolicyArgumentProvider
+import support.TestBase
+import utils.CompilationTestUtils.runCompile
 import utils.IncrementalCompilationUtils
 import kotlin.io.path.writeText
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 /**
  * Incremental compilation behavior tests for single-module scenarios.
@@ -20,6 +18,9 @@ import kotlin.test.assertTrue
  *
  * Uses parameterized tests to ensure IC behavior is consistent across execution policies.
  * All IC rounds within a test share the same BuildSession to preserve IC cache state.
+ *
+ * The tests assert on which sources the compiler actually recompiled, parsed from the
+ * `compile iteration:` debug log.
  */
 @OptIn(ExperimentalBuildToolsApi::class, ExperimentalCompilerArgument::class)
 class IncrementalCompilationTest : TestBase() {
@@ -52,12 +53,7 @@ class IncrementalCompilationTest : TestBase() {
                 setup.icDirectory,
                 setup.workspace
             )
-            val result1 = CompilationTestUtils.runCompile(session, operation1, policy)
-            assertEquals(result1, CompilationResult.COMPILATION_SUCCESS, "Initial compilation should succeed")
-
-            val spellcasterBeforeBytes = CompilationTestUtils.readClassOutputBytes(setup.outputDirectory, "fantasy/casters/Spellcaster.class")
-            val manaSourceBeforeBytes = CompilationTestUtils.readClassOutputBytes(setup.outputDirectory, "fantasy/resources/ManaSource.class")
-            assertTrue(spellcasterBeforeBytes != null && manaSourceBeforeBytes != null, "Classes should exist after initial compilation")
+            assertCompilationSuccessful(runCompile(session, operation1, policy))
 
             // Non-ABI change in ManaSource: change method body only (return value 1 -> 2)
             manaSource.writeText("""
@@ -65,7 +61,7 @@ class IncrementalCompilationTest : TestBase() {
                 class ManaSource { fun mana(): Int = 2 }
             """.trimIndent())
 
-            // Recompile within the same session to preserve IC caches
+            // Recompile within the same session to preserve IC caches, capturing its log.
             val operation2 = IncrementalCompilationUtils.createIncrementalJvmOperation(
                 toolchain,
                 listOf(manaSource, spellcaster),
@@ -73,27 +69,12 @@ class IncrementalCompilationTest : TestBase() {
                 setup.icDirectory,
                 setup.workspace
             )
-            val result2 = CompilationTestUtils.runCompile(session, operation2, policy)
-            assertEquals(
-                result2,
-                CompilationResult.COMPILATION_SUCCESS,
-                "Compilation after body-only change should succeed"
-            )
+            val logger = TestLogger(false)
+            assertCompilationSuccessful(runCompile(session, operation2, policy, logger))
 
-            val spellcasterAfterBytes = CompilationTestUtils.readClassOutputBytes(setup.outputDirectory, "fantasy/casters/Spellcaster.class")
-            val manaSourceAfterBytes = CompilationTestUtils.readClassOutputBytes(setup.outputDirectory, "fantasy/resources/ManaSource.class")
-            assertTrue(spellcasterAfterBytes != null && manaSourceAfterBytes != null, "Classes should still exist after change")
-
-            // Dependent should not be recompiled for body-only change
-            assertTrue(
-                spellcasterBeforeBytes.contentEquals(spellcasterAfterBytes),
-                "Consumer class bytes should remain unchanged for a non-ABI change"
-            )
-            // Producer should change for body-only change
-            assertTrue(
-                !manaSourceBeforeBytes.contentEquals(manaSourceAfterBytes),
-                "Producer class bytes should change after a body-only modification"
-            )
+            // The producer changed, so it is recompiled; the consumer must NOT be (non-ABI change).
+            assertRecompiled(logger, "ManaSource.kt")
+            assertNotRecompiled(logger, "Spellcaster.kt")
         }
     }
 
@@ -125,12 +106,7 @@ class IncrementalCompilationTest : TestBase() {
                 setup.icDirectory,
                 setup.workspace
             )
-            val result1 = CompilationTestUtils.runCompile(session, operation1, policy)
-            assertEquals(result1, CompilationResult.COMPILATION_SUCCESS, "Initial compilation should succeed")
-
-            val runeReaderBeforeBytes = CompilationTestUtils.readClassOutputBytes(setup.outputDirectory, "fantasy/readers/RuneReader.class")
-            val runeBeforeBytes = CompilationTestUtils.readClassOutputBytes(setup.outputDirectory, "fantasy/runes/Rune.class")
-            assertTrue(runeReaderBeforeBytes != null && runeBeforeBytes != null, "Classes should exist after initial compilation")
+            assertCompilationSuccessful(runCompile(session, operation1, policy))
 
             // ABI change in Rune: change signature by adding a parameter (with default)
             rune.writeText("""
@@ -138,7 +114,7 @@ class IncrementalCompilationTest : TestBase() {
                 class Rune { fun power(x: String = "x"): Int = 1 }
             """.trimIndent())
 
-            // Recompile within the same session to preserve IC caches
+            // Recompile within the same session to preserve IC caches, capturing its log.
             val operation2 = IncrementalCompilationUtils.createIncrementalJvmOperation(
                 toolchain,
                 listOf(rune, runeReader),
@@ -146,21 +122,12 @@ class IncrementalCompilationTest : TestBase() {
                 setup.icDirectory,
                 setup.workspace
             )
-            val result2 = CompilationTestUtils.runCompile(session, operation2, policy)
-            assertEquals(result2, CompilationResult.COMPILATION_SUCCESS, "Compilation after ABI change should succeed")
+            val logger = TestLogger(false)
+            assertCompilationSuccessful(runCompile(session, operation2, policy, logger))
 
-            val runeReaderAfterBytes = CompilationTestUtils.readClassOutputBytes(setup.outputDirectory, "fantasy/readers/RuneReader.class")
-            val runeAfterBytes = CompilationTestUtils.readClassOutputBytes(setup.outputDirectory, "fantasy/runes/Rune.class")
-
-            // Both should be recompiled for signature change
-            assertTrue(
-                !runeReaderBeforeBytes.contentEquals(runeReaderAfterBytes),
-                "Consumer class should be recompiled after producer ABI change"
-            )
-            assertTrue(
-                !runeBeforeBytes.contentEquals(runeAfterBytes),
-                "Producer class should be recompiled due to its signature change"
-            )
+            // The signature (ABI) change forces both the producer and its consumer to be recompiled.
+            assertRecompiled(logger, "Rune.kt")
+            assertRecompiled(logger, "RuneReader.kt")
         }
     }
 

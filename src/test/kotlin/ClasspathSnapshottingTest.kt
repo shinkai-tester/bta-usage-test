@@ -1,10 +1,11 @@
+import framework.TestLogger
+import framework.applyTestDefaults
 import org.jetbrains.kotlin.buildtools.api.CompilationResult
 import org.jetbrains.kotlin.buildtools.api.ExecutionPolicy
 import org.jetbrains.kotlin.buildtools.api.ExperimentalBuildToolsApi
 import org.jetbrains.kotlin.buildtools.api.KotlinToolchains
 import org.jetbrains.kotlin.buildtools.api.arguments.ExperimentalCompilerArgument
 import org.jetbrains.kotlin.buildtools.api.arguments.JvmCompilerArguments
-import org.jetbrains.kotlin.buildtools.api.jvm.ClassSnapshotGranularity
 import org.jetbrains.kotlin.buildtools.api.jvm.JvmPlatformToolchain.Companion.jvm
 import org.jetbrains.kotlin.buildtools.api.jvm.jvmCompilationOperation
 import org.jetbrains.kotlin.buildtools.api.jvm.operations.JvmCompilationOperation
@@ -13,7 +14,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ArgumentsSource
 import support.ExecutionPolicyArgumentProvider
 import support.TestBase
-import framework.applyTestDefaults
 import utils.CompilationTestUtils
 import utils.IncrementalCompilationUtils
 import utils.StdlibUtils
@@ -27,9 +27,10 @@ import kotlin.test.assertTrue
 /**
  * Tests for JvmClasspathSnapshottingOperation and multi-module incremental compilation.
  *
- * Validates that classpath snapshots can be generated for compiled module outputs
- * and used as dependency snapshots in downstream incremental compilations,
- * following the pattern from the Kotlin Build Tools API source of truth.
+ * Validates that classpath snapshots can be generated for a compiled module's output and used as
+ * dependency snapshots in a downstream module's incremental compilation. The multi-module tests
+ * assert on which sources the compiler actually recompiled, parsed from the `compile iteration:`
+ * debug log.
  */
 @OptIn(ExperimentalBuildToolsApi::class, ExperimentalCompilerArgument::class)
 class ClasspathSnapshottingTest : TestBase() {
@@ -66,118 +67,130 @@ class ClasspathSnapshottingTest : TestBase() {
 
     @ParameterizedTest(name = "{0}: {displayName}")
     @ArgumentsSource(ExecutionPolicyArgumentProvider::class)
-    @DisplayName("Classpath snapshot with CLASS_LEVEL granularity")
-    fun classpathSnapshotClassLevelGranularity(execution: Pair<KotlinToolchains, ExecutionPolicy>) {
+    @DisplayName("Multi-module IC with snapshots: non-ABI change in lib does NOT recompile app")
+    fun multiModuleIcWithSnapshotsNonAbiChange(execution: Pair<KotlinToolchains, ExecutionPolicy>) {
         val (toolchain, policy) = execution
-        val setup = createTestSetup()
-        val snapshotDir = setup.workspace.resolve("snapshots").createDirectories()
 
-        val source = createKotlinSource(setup.workspace, "DataModel.kt", """
-            package model
-            data class DataModel(val id: Int, val name: String)
-        """)
+        // Body-only change in lib: the consumer must not be recompiled (snapshot diff finds no ABI change).
+        val appRecompileLogger = runLibChangeScenario(
+            toolchain, policy,
+            libBefore = """
+                package lib
+                class Provider { fun value(): Int = 100 }
+            """,
+            libAfter = """
+                package lib
+                class Provider { fun value(): Int = 200 }
+            """,
+        )
 
-        val compileOp = toolchain.jvm.jvmCompilationOperation(listOf(source), setup.outputDirectory) {
-            compilerArguments.applyTestDefaults()
-        }
-        val result = CompilationTestUtils.runCompile(toolchain, compileOp, policy)
-        assertCompilationSuccessful(result)
-
-        toolchain.createBuildSession().use { session ->
-            val snapshotFile = IncrementalCompilationUtils.generateClasspathSnapshot(
-                toolchain, session, setup.outputDirectory, snapshotDir,
-                granularity = ClassSnapshotGranularity.CLASS_LEVEL
-            )
-            assertTrue(snapshotFile.toFile().exists(), "CLASS_LEVEL snapshot file should be created")
-            assertTrue(snapshotFile.toFile().length() > 0, "CLASS_LEVEL snapshot file should not be empty")
-        }
+        assertNotRecompiled(appRecompileLogger, "Consumer.kt")
     }
 
     @ParameterizedTest(name = "{0}: {displayName}")
     @ArgumentsSource(ExecutionPolicyArgumentProvider::class)
-    @DisplayName("Multi-module IC with classpath snapshots: non-ABI change in dependency")
-    fun multiModuleIcWithSnapshots(execution: Pair<KotlinToolchains, ExecutionPolicy>) {
+    @DisplayName("Multi-module IC with snapshots: ABI change in lib recompiles app")
+    fun multiModuleIcWithSnapshotsAbiChange(execution: Pair<KotlinToolchains, ExecutionPolicy>) {
         val (toolchain, policy) = execution
 
-        // Set up "lib" module workspace
+        // Signature change in lib (extra default parameter): the snapshot diff detects the ABI change,
+        // so the consumer must be recompiled.
+        val appRecompileLogger = runLibChangeScenario(
+            toolchain, policy,
+            libBefore = """
+                package lib
+                class Provider { fun value(): Int = 100 }
+            """,
+            libAfter = """
+                package lib
+                class Provider { fun value(multiplier: Int = 1): Int = 100 * multiplier }
+            """,
+        )
+
+        assertRecompiled(appRecompileLogger, "Consumer.kt")
+    }
+
+    /**
+     * Builds a tiny two-module project (`lib` + `app`, where `app` depends on `lib`), then changes
+     * `lib` from [libBefore] to [libAfter] and incrementally recompiles `app` against a fresh
+     * classpath snapshot of `lib`.
+     *
+     * Returns the logger of that final incremental `app` compilation so the caller can assert
+     * which `app` sources were recompiled.
+     */
+    private fun runLibChangeScenario(
+        toolchain: KotlinToolchains,
+        policy: ExecutionPolicy,
+        libBefore: String,
+        libAfter: String,
+    ): TestLogger {
+        // lib module
         val libWorkspace = createTempWorkspace()
         val libOutDir = libWorkspace.resolve("out").createDirectories()
         val snapshotDir = libWorkspace.resolve("snapshots").createDirectories()
-
-        // Set up "app" module workspace
+        // app module (depends on lib)
         val appWorkspace = createTempWorkspace()
         val appOutDir = appWorkspace.resolve("out").createDirectories()
         val appIcDir = appWorkspace.resolve("ic").createDirectories()
 
-        // --- Step 1: Compile the "lib" module ---
-        val libSource = createKotlinSource(libWorkspace, "Provider.kt", """
-            package lib
-            class Provider { fun value(): Int = 100 }
+        val libSource = createKotlinSource(libWorkspace, "Provider.kt", libBefore)
+        val appSource = createKotlinSource(appWorkspace, "Consumer.kt", """
+            package app
+            import lib.Provider
+            class Consumer { fun use() = Provider().value().toString().length }
         """)
 
-        val libCompileOp = toolchain.jvm.jvmCompilationOperation(listOf(libSource), libOutDir) {
-            compilerArguments.applyTestDefaults()
-        }
-        val libResult = CompilationTestUtils.runCompile(toolchain, libCompileOp, policy)
-        assertCompilationSuccessful(libResult)
+        // 1. Compile lib (initial version).
+        assertCompilationSuccessful(compileLib(toolchain, libSource, libOutDir, policy))
 
-        toolchain.createBuildSession().use { session ->
-            // --- Step 2: Generate classpath snapshot of "lib" output ---
-            val libSnapshotFile = IncrementalCompilationUtils.generateClasspathSnapshot(
+        return toolchain.createBuildSession().use { session ->
+            // 2. Snapshot lib and do the first incremental compile of app against it.
+            val snapshot1 = IncrementalCompilationUtils.generateClasspathSnapshot(
                 toolchain, session, libOutDir, snapshotDir
             )
-
-            // --- Step 3: Initial IC compile of "app" module with "lib" as dependency ---
-            val appSource = createKotlinSource(appWorkspace, "Consumer.kt", """
-                package app
-                import lib.Provider
-                class Consumer { fun use() = Provider().value().toString().length }
-            """)
-
             val appOp1 = createAppOperation(
                 toolchain, appWorkspace, appOutDir, appIcDir, libOutDir,
-                listOf(appSource), listOf(libSnapshotFile)
+                listOf(appSource), listOf(snapshot1)
             )
-            val appResult1 = CompilationTestUtils.runCompile(session, appOp1, policy)
-            assertEquals(CompilationResult.COMPILATION_SUCCESS, appResult1, "Initial app compilation should succeed")
+            assertEquals(
+                CompilationResult.COMPILATION_SUCCESS,
+                CompilationTestUtils.runCompile(session, appOp1, policy),
+                "Initial app compilation should succeed"
+            )
 
-            val consumerBeforeBytes = CompilationTestUtils.readClassOutputBytes(appOutDir, "app/Consumer.class")
-            assertTrue(consumerBeforeBytes != null, "Consumer class should exist after initial compilation")
+            // 3. Change lib and recompile it.
+            libSource.writeText(libAfter.trimIndent())
+            assertCompilationSuccessful(compileLib(toolchain, libSource, libOutDir, policy))
 
-            // --- Step 4: Non-ABI change in "lib" (body-only) and recompile lib ---
-            libSource.writeText("""
-                package lib
-                class Provider { fun value(): Int = 200 }
-            """.trimIndent())
-
-            val libCompileOp2 = toolchain.jvm.jvmCompilationOperation(listOf(libSource), libOutDir) {
-                compilerArguments.applyTestDefaults()
-            }
-            val libResult2 = CompilationTestUtils.runCompile(session, libCompileOp2, policy)
-            assertCompilationSuccessful(libResult2)
-
-            // --- Step 5: Re-snapshot "lib" and re-compile "app" incrementally ---
-            val libSnapshotFile2 = IncrementalCompilationUtils.generateClasspathSnapshot(
+            // 4. Re-snapshot lib and incrementally recompile app, capturing its log.
+            val snapshot2 = IncrementalCompilationUtils.generateClasspathSnapshot(
                 toolchain, session, libOutDir, snapshotDir
             )
-
             val appOp2 = createAppOperation(
                 toolchain, appWorkspace, appOutDir, appIcDir, libOutDir,
-                listOf(appSource), listOf(libSnapshotFile2)
+                listOf(appSource), listOf(snapshot2)
             )
-            val appResult2 = CompilationTestUtils.runCompile(session, appOp2, policy)
-            assertEquals(CompilationResult.COMPILATION_SUCCESS, appResult2, "App recompilation should succeed")
-
-            val consumerAfterBytes = CompilationTestUtils.readClassOutputBytes(appOutDir, "app/Consumer.class")
-            assertTrue(consumerAfterBytes != null, "Consumer class should still exist after recompilation")
-
-            // For a non-ABI change in the dependency, the consumer should ideally not be recompiled
-            // (the snapshot diff should detect no ABI change). This assertion validates the snapshot-based IC.
-            assertTrue(
-                consumerBeforeBytes.contentEquals(consumerAfterBytes),
-                "Consumer should not be recompiled when dependency has only a non-ABI change (detected via classpath snapshot)"
+            val logger = TestLogger(false)
+            assertEquals(
+                CompilationResult.COMPILATION_SUCCESS,
+                CompilationTestUtils.runCompile(session, appOp2, policy, logger),
+                "App recompilation should succeed"
             )
+            logger
         }
+    }
+
+    /** Compiles the single-file `lib` module as a standalone (non-incremental) compilation. */
+    private fun compileLib(
+        toolchain: KotlinToolchains,
+        libSource: Path,
+        libOutDir: Path,
+        policy: ExecutionPolicy,
+    ): CompilationResult {
+        val op = toolchain.jvm.jvmCompilationOperation(listOf(libSource), libOutDir) {
+            compilerArguments.applyTestDefaults()
+        }
+        return CompilationTestUtils.runCompile(toolchain, op, policy)
     }
 
     /**
